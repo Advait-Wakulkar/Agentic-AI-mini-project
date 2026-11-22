@@ -1,0 +1,85 @@
+{
+  "session": "9d256627",
+  "timestamp": "2026-11-22T16:08:09",
+  "llm": "ollama:qwen3:4b",
+  "decider": "rules",
+  "prompt_variant": "baseline",
+  "today": "2026-11-22",
+  "patient_alias": "Test Patient A",
+  "user_message": "hi",
+  "decision": {
+    "intent": "other",
+    "intent_probs": {
+      "book": 0.0,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 1.0
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.95,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "decider": "rules",
+      "decision": {
+        "intent": "other",
+        "intent_probs": {
+          "book": 0.0,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 1.0
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.95,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\n  \"action\": \"reply\",\n  \"argument\": {\n    \"message\": \"Hello! I'm your scheduling assistant for Bright Smile Dental. How can I help you today? Please let me know what kind of dental appointment you'd like to book.\"\n  }\n}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Hello! I'm your scheduling assistant for Bright Smile Dental. How can I help you today? Please let me know what kind of dental appointment you'd like to book."
+        }
+      }
+    },
+    {
+      "step": 3,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 4,
+      "kind": "OUTPUT_GUARD",
+      "passed": true
+    },
+    {
+      "step": 5,
+      "kind": "STOP",
+      "stop_reason": "replied",
+      "reply": "Hello! I'm your scheduling assistant for Bright Smile Dental. How can I help you today? Please let me know what kind of dental appointment you'd like to book."
+    }
+  ],
+  "final_reply": "Hello! I'm your scheduling assistant for Bright Smile Dental. How can I help you today? Please let me know what kind of dental appointment you'd like to book.",
+  "stop_reason": "replied",
+  "seconds": 10.63,
+  "db_appointments_for_patient": []
+}

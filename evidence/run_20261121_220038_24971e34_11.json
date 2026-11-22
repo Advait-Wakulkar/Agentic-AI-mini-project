@@ -1,0 +1,172 @@
+{
+  "session": "24971e34",
+  "timestamp": "2026-11-21T22:00:38",
+  "llm": "ollama:qwen3:1.7b",
+  "decider": "rules",
+  "prompt_variant": "baseline",
+  "today": "2026-11-21",
+  "patient_alias": "Test Patient A",
+  "user_message": "book it",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.769,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 0.231
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.769,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "decider": "rules",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.769,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 0.231
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.769,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261123-1300-P1\", \"reason\": \"Patient Test Patient A needs a 30-minute appointment.\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261123-1300-P1",
+          "reason": "Patient Test Patient A needs a 30-minute appointment."
+        }
+      }
+    },
+    {
+      "step": 3,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 4,
+      "kind": "APPROVAL_REQUESTED",
+      "request": {
+        "slot_id": "S-20261123-1300-P1",
+        "date": "2026-11-23",
+        "time": "13:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient Test Patient A needs a 30-minute appointment.",
+        "patient_request": "book it"
+      }
+    },
+    {
+      "step": 5,
+      "kind": "HUMAN_DECISION",
+      "approved": true,
+      "channel": "ui-staff",
+      "approval_id": 114,
+      "request": {
+        "slot_id": "S-20261123-1300-P1",
+        "date": "2026-11-23",
+        "time": "13:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient Test Patient A needs a 30-minute appointment.",
+        "patient_request": "book it"
+      }
+    },
+    {
+      "step": 6,
+      "kind": "VERIFY",
+      "saved": {
+        "ok": true
+      },
+      "verified": true,
+      "slot_id": "S-20261123-1300-P1"
+    },
+    {
+      "step": 7,
+      "kind": "TOOL_OBSERVATION",
+      "action": "book_appointment",
+      "observation": {
+        "ok": true,
+        "approved": true,
+        "verified": true,
+        "appointment": {
+          "slot_id": "S-20261123-1300-P1",
+          "date": "2026-11-23",
+          "time": "13:00",
+          "provider": "Dr. Rivera",
+          "patient_alias": "Test Patient A",
+          "reason": "Patient Test Patient A needs a 30-minute appointment.",
+          "patient_request": "book it"
+        }
+      }
+    },
+    {
+      "step": 8,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment has been successfully booked. The slot is: Monday, November 23 at 13:00 with Dr. Rivera. Enjoy your dental visit!\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Your appointment has been successfully booked. The slot is: Monday, November 23 at 13:00 with Dr. Rivera. Enjoy your dental visit!"
+        }
+      }
+    },
+    {
+      "step": 9,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 10,
+      "kind": "OUTPUT_GUARD",
+      "passed": true
+    },
+    {
+      "step": 11,
+      "kind": "STOP",
+      "stop_reason": "booked_verified",
+      "reply": "Your appointment has been successfully booked. The slot is: Monday, November 23 at 13:00 with Dr. Rivera. Enjoy your dental visit!"
+    }
+  ],
+  "final_reply": "Your appointment has been successfully booked. The slot is: Monday, November 23 at 13:00 with Dr. Rivera. Enjoy your dental visit!",
+  "stop_reason": "booked_verified",
+  "seconds": 7.68,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261123-1300-P1",
+      "date": "2026-11-23",
+      "time": "13:00",
+      "provider": "Dr. Rivera",
+      "patient_alias": "Test Patient A",
+      "reason": "Patient Test Patient A needs a 30-minute appointment.",
+      "approval_id": 114,
+      "created_at": "2026-11-21T22:00:37"
+    }
+  ]
+}

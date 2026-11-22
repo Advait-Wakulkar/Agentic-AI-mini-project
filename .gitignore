@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+data/jev_cache.json
+node_modules/
+.next/
+.claude/settings.local.json
+*.tsbuildinfo
+.DS_Store
+frontend/.env*

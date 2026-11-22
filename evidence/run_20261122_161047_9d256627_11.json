@@ -1,0 +1,172 @@
+{
+  "session": "9d256627",
+  "timestamp": "2026-11-22T16:10:47",
+  "llm": "ollama:qwen3:4b",
+  "decider": "rules",
+  "prompt_variant": "baseline",
+  "today": "2026-11-22",
+  "patient_alias": "Test Patient A",
+  "user_message": "yes",
+  "decision": {
+    "intent": "other",
+    "intent_probs": {
+      "book": 0.0,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 1.0
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.95,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "decider": "rules",
+      "decision": {
+        "intent": "other",
+        "intent_probs": {
+          "book": 0.0,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 1.0
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.95,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\n  \"action\": \"book_appointment\",\n  \"argument\": {\n    \"slot_id\": \"S-20261123-0900-P1\",\n    \"reason\": \"Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots.\"\n  }\n}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261123-0900-P1",
+          "reason": "Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots."
+        }
+      }
+    },
+    {
+      "step": 3,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 4,
+      "kind": "APPROVAL_REQUESTED",
+      "request": {
+        "slot_id": "S-20261123-0900-P1",
+        "date": "2026-11-23",
+        "time": "09:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots.",
+        "patient_request": "yes"
+      }
+    },
+    {
+      "step": 5,
+      "kind": "HUMAN_DECISION",
+      "approved": true,
+      "channel": "ui-staff",
+      "approval_id": 114,
+      "request": {
+        "slot_id": "S-20261123-0900-P1",
+        "date": "2026-11-23",
+        "time": "09:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots.",
+        "patient_request": "yes"
+      }
+    },
+    {
+      "step": 6,
+      "kind": "VERIFY",
+      "saved": {
+        "ok": true
+      },
+      "verified": true,
+      "slot_id": "S-20261123-0900-P1"
+    },
+    {
+      "step": 7,
+      "kind": "TOOL_OBSERVATION",
+      "action": "book_appointment",
+      "observation": {
+        "ok": true,
+        "approved": true,
+        "verified": true,
+        "appointment": {
+          "slot_id": "S-20261123-0900-P1",
+          "date": "2026-11-23",
+          "time": "09:00",
+          "provider": "Dr. Rivera",
+          "patient_alias": "Test Patient A",
+          "reason": "Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots.",
+          "patient_request": "yes"
+        }
+      }
+    },
+    {
+      "step": 8,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\n  \"action\": \"reply\",\n  \"argument\": {\n    \"message\": \"Your appointment with Dr. Rivera for Monday, November 23rd at 09:00 has been confirmed! Thank you for choosing Bright Smile Dental. We look forward to helping you with your root canal treatment.\"\n  }\n}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Your appointment with Dr. Rivera for Monday, November 23rd at 09:00 has been confirmed! Thank you for choosing Bright Smile Dental. We look forward to helping you with your root canal treatment."
+        }
+      }
+    },
+    {
+      "step": 9,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 10,
+      "kind": "OUTPUT_GUARD",
+      "passed": true
+    },
+    {
+      "step": 11,
+      "kind": "STOP",
+      "stop_reason": "booked_verified",
+      "reply": "Your appointment with Dr. Rivera for Monday, November 23rd at 09:00 has been confirmed! Thank you for choosing Bright Smile Dental. We look forward to helping you with your root canal treatment."
+    }
+  ],
+  "final_reply": "Your appointment with Dr. Rivera for Monday, November 23rd at 09:00 has been confirmed! Thank you for choosing Bright Smile Dental. We look forward to helping you with your root canal treatment.",
+  "stop_reason": "booked_verified",
+  "seconds": 25.29,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261123-0900-P1",
+      "date": "2026-11-23",
+      "time": "09:00",
+      "provider": "Dr. Rivera",
+      "patient_alias": "Test Patient A",
+      "reason": "Test Patient A wants a root canal and confirmed Dr. Rivera for morning slots.",
+      "approval_id": 114,
+      "created_at": "2026-11-22T16:10:43"
+    }
+  ]
+}

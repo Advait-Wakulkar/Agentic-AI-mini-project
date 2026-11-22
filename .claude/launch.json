@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "/Users/advaitwakulkar/Agentic-AI-mini-project/.venv/bin/uvicorn",
+      "runtimeArgs": ["--app-dir", "/Users/advaitwakulkar/Agentic-AI-mini-project", "backend.api:app", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/advaitwakulkar/Agentic-AI-mini-project/frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

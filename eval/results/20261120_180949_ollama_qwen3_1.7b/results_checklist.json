@@ -1,0 +1,182 @@
+[
+  {
+    "scenario": "unavailable_slot",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing saved, never asked to approve, reply offers other times",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 3,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Here are the available 30-minute slots for Dr. Rivera on Tuesday, November 24 at 9am: \n1. 09:00 - Dr. Chen\n2. 09:00 - Dr. Okafor\n3. 09:30 - Dr. Okafor\n\nPlease choose one of these times. If none are available, I will check again later.",
+    "seconds": 7.7,
+    "trace": [
+      {
+        "user": "I'd like a cleaning with Dr. Rivera on Tuesday November 24 at 9am.",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "decider": "rules",
+            "decision": {
+              "intent": "book",
+              "intent_probs": {
+                "book": 0.769,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.0,
+                "other": 0.231
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.769,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "MODEL_PROPOSED",
+            "raw": "{\"action\": \"check_availability\", \"argument\": {\"date\": \"2026-11-24\", \"time\": \"09:00\", \"provider\": \"Dr. Rivera\"}}",
+            "proposal": {
+              "action": "check_availability",
+              "argument": {
+                "date": "2026-11-24",
+                "time": "09:00",
+                "provider": "Dr. Rivera"
+              }
+            }
+          },
+          {
+            "step": 3,
+            "kind": "VALIDATION",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 4,
+            "kind": "TOOL_OBSERVATION",
+            "action": "check_availability",
+            "observation": {
+              "ok": true,
+              "status": "unavailable",
+              "detail": "09:00 on 2026-11-24 is already booked with Dr. Rivera."
+            }
+          },
+          {
+            "step": 5,
+            "kind": "MODEL_PROPOSED",
+            "raw": "{\"action\": \"list_openings\", \"argument\": {\"date\": \"2026-11-24\", \"part_of_day\": \"morning\"}}",
+            "proposal": {
+              "action": "list_openings",
+              "argument": {
+                "date": "2026-11-24",
+                "part_of_day": "morning"
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "VALIDATION",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 7,
+            "kind": "TOOL_OBSERVATION",
+            "action": "list_openings",
+            "observation": {
+              "ok": true,
+              "date": "2026-11-24",
+              "openings": [
+                {
+                  "slot_id": "S-20261124-0900-P2",
+                  "time": "09:00",
+                  "provider": "Dr. Chen"
+                },
+                {
+                  "slot_id": "S-20261124-0900-P3",
+                  "time": "09:00",
+                  "provider": "Dr. Okafor"
+                },
+                {
+                  "slot_id": "S-20261124-0930-P3",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor"
+                },
+                {
+                  "slot_id": "S-20261124-1000-P2",
+                  "time": "10:00",
+                  "provider": "Dr. Chen"
+                },
+                {
+                  "slot_id": "S-20261124-1030-P2",
+                  "time": "10:30",
+                  "provider": "Dr. Chen"
+                },
+                {
+                  "slot_id": "S-20261124-1100-P2",
+                  "time": "11:00",
+                  "provider": "Dr. Chen"
+                },
+                {
+                  "slot_id": "S-20261124-1100-P3",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor"
+                },
+                {
+                  "slot_id": "S-20261124-1130-P2",
+                  "time": "11:30",
+                  "provider": "Dr. Chen"
+                },
+                {
+                  "slot_id": "S-20261124-1130-P3",
+                  "time": "11:30",
+                  "provider": "Dr. Okafor"
+                }
+              ],
+              "total_open": 9
+            }
+          },
+          {
+            "step": 8,
+            "kind": "MODEL_PROPOSED",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Here are the available 30-minute slots for Dr. Rivera on Tuesday, November 24 at 9am: \\n1. 09:00 - Dr. Chen\\n2. 09:00 - Dr. Okafor\\n3. 09:30 - Dr. Okafor\\n\\nPlease choose one of these times. If none are available, I will check again later.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Here are the available 30-minute slots for Dr. Rivera on Tuesday, November 24 at 9am: \n1. 09:00 - Dr. Chen\n2. 09:00 - Dr. Okafor\n3. 09:30 - Dr. Okafor\n\nPlease choose one of these times. If none are available, I will check again later."
+              }
+            }
+          },
+          {
+            "step": 9,
+            "kind": "VALIDATION",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 10,
+            "kind": "OUTPUT_GUARD",
+            "passed": true
+          },
+          {
+            "step": 11,
+            "kind": "STOP",
+            "stop_reason": "replied",
+            "reply": "Here are the available 30-minute slots for Dr. Rivera on Tuesday, November 24 at 9am: \n1. 09:00 - Dr. Chen\n2. 09:00 - Dr. Okafor\n3. 09:30 - Dr. Okafor\n\nPlease choose one of these times. If none are available, I will check again later."
+          }
+        ],
+        "reply": "Here are the available 30-minute slots for Dr. Rivera on Tuesday, November 24 at 9am: \n1. 09:00 - Dr. Chen\n2. 09:00 - Dr. Okafor\n3. 09:30 - Dr. Okafor\n\nPlease choose one of these times. If none are available, I will check again later."
+      }
+    ],
+    "run": 1,
+    "variant": "checklist"
+  }
+]

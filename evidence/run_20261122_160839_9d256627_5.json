@@ -1,0 +1,85 @@
+{
+  "session": "9d256627",
+  "timestamp": "2026-11-22T16:08:39",
+  "llm": "ollama:qwen3:4b",
+  "decider": "rules",
+  "prompt_variant": "baseline",
+  "today": "2026-11-22",
+  "patient_alias": "Test Patient A",
+  "user_message": "I wanted a Root Canal",
+  "decision": {
+    "intent": "other",
+    "intent_probs": {
+      "book": 0.0,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 1.0
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.95,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "decider": "rules",
+      "decision": {
+        "intent": "other",
+        "intent_probs": {
+          "book": 0.0,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 1.0
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.95,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "MODEL_PROPOSED",
+      "raw": "{\n  \"action\": \"reply\",\n  \"argument\": {\n    \"message\": \"I see you'd like a root canal. Root canals are typically handled by Dr. Rivera or Dr. Chen. Let me check the availability for the next few days to find a good time for you. Would you prefer morning or afternoon slots?\"\n  }\n}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "I see you'd like a root canal. Root canals are typically handled by Dr. Rivera or Dr. Chen. Let me check the availability for the next few days to find a good time for you. Would you prefer morning or afternoon slots?"
+        }
+      }
+    },
+    {
+      "step": 3,
+      "kind": "VALIDATION",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 4,
+      "kind": "OUTPUT_GUARD",
+      "passed": true
+    },
+    {
+      "step": 5,
+      "kind": "STOP",
+      "stop_reason": "replied",
+      "reply": "I see you'd like a root canal. Root canals are typically handled by Dr. Rivera or Dr. Chen. Let me check the availability for the next few days to find a good time for you. Would you prefer morning or afternoon slots?"
+    }
+  ],
+  "final_reply": "I see you'd like a root canal. Root canals are typically handled by Dr. Rivera or Dr. Chen. Let me check the availability for the next few days to find a good time for you. Would you prefer morning or afternoon slots?",
+  "stop_reason": "replied",
+  "seconds": 3.11,
+  "db_appointments_for_patient": []
+}
