@@ -51,7 +51,8 @@ AGENTS = ("scheduling", "faq")
 GATED = {"book_appointment": "book", "cancel_appointment": "cancel", "reschedule_appointment": "reschedule"}
 VERIFIED_STOP = {"book": "booked_verified", "cancel": "cancelled_verified", "reschedule": "rescheduled_verified"}
 
-_CLAIM_WORD = re.compile(r"\b(confirm(ed|ation)|booked|scheduled|reserved|all set|you'?re set|is set)\b", re.I)
+# "confirmed" is a claim; "call for confirmation" is not (found in the demo re-run).
+_CLAIM_WORD = re.compile(r"\b(confirmed|booked|scheduled|reserved|all set|you'?re set|is set)\b", re.I)
 _CHANGE_WORD = re.compile(r"\b(cancell?ed|rescheduled|moved|changed)\b", re.I)
 _NOT_A_CLAIM = re.compile(
     r"\b(not|n't|no|nothing|never|cannot|unable|yet|already|fully|taken|unavailable|"
@@ -113,6 +114,7 @@ class Turn:
     guard_retried: bool = False
     transferred: bool = False
     looked_up: bool = False                              # list_my_appointments seen this turn
+    unknown_provider: Optional[str] = None               # a dentist name the tools did not recognise
     unavailable_seen: bool = False                       # requested time turned out to be taken / not offered
     turn_slots: set = field(default_factory=set)         # slot ids returned by tools this turn
     calls_made: set = field(default_factory=set)         # (action, args) already executed this turn
@@ -348,6 +350,16 @@ def _options_text(slots: list[dict]) -> str:
 
 def _fallback_reply(session: Session, turn: Turn, base: str) -> str:
     """When the model fails, Python still gives the patient something true and useful."""
+    if turn.agent == "faq":
+        return ("Sorry, I can't confirm that here. I can tell you about our hours, address, services, dentists, policies, "
+                "insurance and prices, or help you book, cancel or move an appointment.")
+    asked_for = re.findall(r"\b(?i:dr|doctor)\.?\s+([A-Z][a-zA-Z'-]+)", turn.user_message)
+    unknown = turn.unknown_provider or next((f"Dr. {n}" for n in asked_for if n.capitalize() not in PROVIDER_NAMES), None)
+    if unknown:
+        turn.unknown_provider = unknown
+        # Found in the demo re-run: "Dr. House on Saturday at midnight" ended in a generic error.
+        base = (f"{base} We don't have a {turn.unknown_provider}; our dentists are Dr. Rivera, Dr. Chen and Dr. Okafor, "
+                "and we're open weekdays 9:00-17:00.").strip()
     if (turn.decision or {}).get("intent") == "cancel_or_reschedule":
         mine = tools.list_appointments(session.conn, session.patient_alias)
         if not mine:
@@ -474,12 +486,17 @@ def _reply_problem(session: Session, turn: Turn, message: str) -> tuple[Optional
         # Demo run: "book my friend Test Patient B" -> reply said "booked for Test Patient B".
         return (f"your reply mentions another patient ({other}); you only act for {session.patient_alias}.",
                 f"I can only help with appointments for you ({session.patient_alias}). Anyone else needs to contact the office.")
+    # The replacement must say what really happened (found in eval: a booking WAS made, and the replacement
+    # reply said "I haven't changed anything yet").
+    done = _confirmation(turn.booked) if turn.booked else ("Your appointment has been cancelled." if turn.changed else None)
     if claims_booking(message) and not turn.booked:
         return ("your reply says an appointment is booked, but nothing was approved, saved and verified in this turn.",
-                _fallback_reply(session, turn, "I haven't changed anything yet."))
+                done or _fallback_reply(session, turn, "I haven't changed anything yet."))
     if claims_change(message) and not turn.changed:
-        return ("your reply says an appointment was cancelled or moved, but nothing like that was approved and verified.",
-                _fallback_reply(session, turn, "I haven't changed anything yet."))
+        what = "your reply says an appointment was cancelled or moved, but nothing like that was approved and verified."
+        if turn.booked:
+            return what + " A NEW appointment was booked; say exactly that.", _confirmation(turn.booked) + " Your other appointments are unchanged."
+        return what, done or _fallback_reply(session, turn, "I haven't changed anything yet.")
     wrong = _weekday_mismatch(message, session.today)
     if wrong:
         return (f"a weekday in your reply is wrong: {wrong} Use the dates exactly as the tools returned them.",
@@ -531,7 +548,10 @@ _NEW_VISIT = re.compile(r"\b(another|new|additional|second|extra|also|as well|to
 def _book_while_rescheduling_problem(session: Session, turn: Turn, action: str) -> Optional[str]:
     """Python rule: if the patient was moving an appointment, the time they pick moves it; it is not a new booking.
     Found in the demo re-run: 'the first one is fine' after reschedule options became a second appointment."""
-    if action != "book_appointment" or session.last_intent != "cancel_or_reschedule" or _NEW_VISIT.search(turn.user_message):
+    this_intent = (turn.decision or {}).get("intent")
+    moving = session.last_intent == "cancel_or_reschedule" or this_intent == "cancel_or_reschedule"
+    # (also within one message: found in eval, "move my appointment to Wednesday 9:00" -> book_appointment)
+    if action != "book_appointment" or not moving or _NEW_VISIT.search(turn.user_message):
         return None
     mine = tools.list_my_appointments(session.conn, session.patient_alias)["appointments"]
     if not mine:
@@ -573,6 +593,9 @@ def _prepare_gated(session: Session, turn: Turn, action: str, arg: dict) -> tupl
         return problem, None
     if kind == "cancel":
         return None, tools.prepare_cancel(session.conn, arg["appointment_id"], session.patient_alias, arg["reason"])
+    wrong_day = _wrong_date_problem(session, turn, arg["new_date"])
+    if wrong_day:
+        return wrong_day, None   # found in the demo re-run: "push that to Wednesday" -> moved to Thursday
     # Reschedule: Python turns the requested date/time into a real slot (small models invent slot ids).
     found = tools.check_availability(session.conn, arg["new_date"], arg["new_time"], arg.get("provider"))
     _remember_slots(turn, "check_availability", found)
@@ -772,6 +795,8 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
             except Exception as e:  # a tool failure is an observation, not a crash
                 obs = {"ok": False, "error": f"Tool '{action}' failed: {e}"}
             _remember_slots(turn, action, obs)
+            if not obs.get("ok") and "Unknown provider" in str(obs.get("error", "")):
+                turn.unknown_provider = arg.get("provider")
 
         # 4. Observation back to the model
         turn.calls_made.add(call_key)   # it ran: an identical repeat would get the same answer

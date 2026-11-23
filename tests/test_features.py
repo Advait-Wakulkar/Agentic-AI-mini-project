@@ -468,3 +468,71 @@ def test_regression_invented_phone_number_is_blocked(conn):
     turn, _, llm = say(conn, session, [act("get_office_info", topic="hours"), act("reply", message=bad), act("reply", message=bad)],
                        "What are your hours?")
     assert "never invent contact details" in llm.calls[2][-1]["content"] and "555" not in turn.reply
+
+
+# --- regressions from the third demo run (evidence/demo_20261123_144848.md) -------------------
+
+def test_regression_faq_replacement_is_faq_style(conn):
+    """Run 3: 'We do accept Delta Dental ... call for confirmation' was replaced with a SCHEDULING fallback
+    because 'confirmation' counted as a booking claim."""
+    session = session_for(conn)
+    bad = "We do accept Delta Dental insurance. Please call the office with your plan details for confirmation."
+    turn, _, llm = say(conn, session, [act("get_office_info", topic="insurance"), act("reply", message=bad), act("reply", message=bad)],
+                       "do you take Delta Dental insurance?")
+    assert "do not claim any plan is accepted" in llm.calls[2][-1]["content"]
+    assert turn.reply == tools.OFFICE_INFO["insurance"]
+
+
+def test_call_for_confirmation_is_not_a_booking_claim():
+    from backend.agent import claims_booking
+    assert not claims_booking("Please call the office for confirmation.")
+    assert claims_booking("Your appointment is confirmed.")
+
+
+def test_regression_reschedule_uses_the_day_the_patient_named(conn, open_slot):
+    """Run 3: 'push that to Wednesday afternoon' -> reschedule request for Thursday."""
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    turn, approver, llm = say(conn, session, [
+        act("list_my_appointments"),
+        act("reschedule_appointment", appointment_id=appt["id"], new_date="2026-11-26", new_time="15:00", reason="x"),
+        act("reply", message="Which time on Wednesday works?"),
+    ], "can we reschedule that to Wednesday afternoon instead?")
+    assert approver.requests == [] and "use_named_date" in llm.calls[2][-1]["content"]
+
+
+def test_regression_unknown_dentist_is_named_in_fallback(conn):
+    """Run 3: 'Dr. House on Saturday at midnight' ended in a generic 'I ran into a problem'."""
+    session = session_for(conn)
+    turn, _, _ = say(conn, session, [act("list_openings", date="2026-11-23", provider="Dr. House"),
+                                     act("book_appointment", slot_id="tuesday"), "{bad", "{bad"],
+                     "Book me with Dr. House on Saturday at midnight.")
+    assert "We don't have a Dr. House" in turn.reply and "Dr. Rivera, Dr. Chen and Dr. Okafor" in turn.reply
+
+
+def test_regression_move_in_one_message_must_reschedule(conn, open_slot):
+    """Eval: 'Can you move my appointment to Wednesday 09:00?' -> book_appointment (a second appointment)."""
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    new = tools.list_openings(conn, "2026-11-25", provider="Dr. Chen")["openings"][0]
+    turn, approver, llm = say(conn, session, [
+        act("list_my_appointments"),
+        act("book_appointment", slot_id=new["slot_id"], reason="x"),
+        act("reschedule_appointment", appointment_id=appt["id"], new_date="2026-11-25", new_time=new["time"], provider="Dr. Chen", reason="x"),
+        act("reply", message=f"Moved to Wednesday November 25 at {new['time']}."),
+    ], f"Can you move my appointment to Wednesday November 25 at {new['time']} with Dr. Chen?")
+    assert "reschedule_not_book" in llm.calls[2][-1]["content"]
+    assert turn.stop_reason == "rescheduled_verified" and count_appointments(conn) == 1
+
+
+def test_replacement_reply_never_denies_a_real_booking(conn, open_slot):
+    """Eval: a booking was made, the reply falsely said 'rescheduled', and the replacement said
+    'I haven't changed anything yet'. The replacement must state the real booking."""
+    session = session_for(conn)
+    turn, _, _ = say(conn, session, [
+        act("book_appointment", slot_id=open_slot["slot_id"], reason="x"),
+        act("reply", message=f"Your appointment has been rescheduled to {open_slot['time']}."),
+        act("reply", message=f"Your appointment has been rescheduled to {open_slot['time']}."),
+    ], f"Book Dr. Chen {BUSY_TUESDAY} at {open_slot['time']}")
+    assert turn.stop_reason == "booked_verified"
+    assert turn.reply.startswith("Your appointment is confirmed") and "haven't changed" not in turn.reply
