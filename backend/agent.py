@@ -55,6 +55,11 @@ VERIFIED_STOP = {"book": "booked_verified", "cancel": "cancelled_verified", "res
 _CLAIM_WORD = re.compile(r"\b(confirmed|booked|scheduled|reserved|all set|you'?re set|is set)\b", re.I)
 _CHANGE_WORD = re.compile(r"\b(cancell?ed|rescheduled|moved|changed)\b", re.I)
 _NOT_A_CLAIM = re.compile(
+    # "you have an appointment scheduled for..." describes an EXISTING appointment, not a new booking
+    # (found comparing models: qwen3-32b's correct "would you like to cancel it?" reply was blocked).
+    # Narrow on purpose: an earlier, broader "you have" exception let "You have booked Tuesday at 13:30" through.
+    r"\byou (have|already have) (an?|one|two|three|\d+|no|any)\s+(upcoming\s+|existing\s+)?appointments?\b|"
+    r"\byour (current|existing|upcoming|other) appointments?\b|"
     r"\b(not|n't|no|nothing|never|cannot|unable|yet|already|fully|taken|unavailable|"
     r"if|once|after|before|would|shall|should|want|need|can I|could|may I|please (choose|confirm|pick))\b|\?",
     re.I,

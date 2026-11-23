@@ -6,8 +6,10 @@ touched. A scripted "staff member" approves the workflow's requests; every appro
 labelled as scripted in the log.
 
     python -m eval.demo_workflow                 # writes evidence/demo_<timestamp>.md
+    python -m eval.demo_workflow --provider openrouter --model qwen/qwen3-32b   # agents on another model
 """
 
+import argparse
 import json
 import time
 from datetime import date, datetime
@@ -108,9 +110,13 @@ def run_conversation(title, messages, session, llm, decider, approve, log, label
 
 
 def main():
-    llm, decider = get_provider(), get_decider()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--provider", help="agent model provider (default: LLM_PROVIDER)")
+    ap.add_argument("--model", help="agent model (default: LLM_MODEL)")
+    args = ap.parse_args()
+    llm, decider = get_provider(args.provider, args.model), get_decider()
     conn = db.init_db(config.DATABASE_URL, TODAY, schema=db.private_schema("eval"))
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + llm.name.replace(":", "_").replace("/", "_")
     log = [f"# Demo run {stamp}", "",
            f"- agents: `{llm.name}`  router: `{decider.name}`  database: private schema `{conn.schema}` (dropped after the run)",
            f"- clinic 'today': {TODAY} (Friday). Patient: {PATIENT} (fictional). Staff approvals below are **scripted for the demo**.",

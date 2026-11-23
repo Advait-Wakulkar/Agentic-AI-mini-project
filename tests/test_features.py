@@ -560,3 +560,23 @@ def test_spanish_weekday_is_recognised():
     from backend.agent import mentions_date, named_dates
     assert mentions_date("¿tienen citas el martes por la tarde?", date(2026, 11, 24), date(2026, 11, 20))
     assert named_dates("¿tienen citas el martes?", date(2026, 11, 20))[0] == date(2026, 11, 24)
+
+
+def test_describing_an_existing_appointment_is_not_a_booking_claim():
+    """Model comparison (qwen3-32b): 'I see you have an appointment scheduled for ... Would you like to cancel it?'
+    was blocked as a false booking claim."""
+    from backend.agent import claims_booking
+    assert not claims_booking("I see you have an appointment scheduled for Tuesday at 13:30 with Dr. Chen.")
+    assert not claims_booking("Your upcoming appointment is scheduled for Tuesday.")
+    assert claims_booking("I've scheduled you for Tuesday at 13:30.")
+    assert claims_booking("Your appointment is booked for Tuesday.")
+
+
+def test_regression_you_have_booked_is_a_claim():
+    """Model comparison: after exempting 'you have ...' sentences, qwen3:1.7b's false 'You have booked Tuesday
+    November 24 at 13:30' got through the guard AND the eval's false-booking counter."""
+    from backend.agent import claims_booking
+    assert claims_booking("You have booked Tuesday November 24 at 13:30 with Dr. Rivera.")
+    assert claims_booking("You have been booked for Tuesday.")
+    assert not claims_booking("I see you have an appointment scheduled for Tuesday at 13:30 with Dr. Chen.")
+    assert not claims_booking("You have one upcoming appointment scheduled for Tuesday.")
