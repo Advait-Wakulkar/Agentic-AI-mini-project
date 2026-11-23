@@ -58,8 +58,6 @@ def route(d: Decision, policy_name: str = "strict") -> dict:
     policy = POLICIES[policy_name]
     if d.medical_advice >= policy["action_threshold"]:
         return {"action": "front_desk", "reason": "medical_advice"}
-    if d.intent == "cancel_or_reschedule" and d.intent_probs[d.intent] >= policy["action_threshold"]:
-        return {"action": "front_desk", "reason": "cancel_or_reschedule_not_supported"}
 
     notes = []
     if d.skip_approval >= policy["review_threshold"]:
@@ -73,7 +71,6 @@ def route(d: Decision, policy_name: str = "strict") -> dict:
 
 FRONT_DESK_REPLIES = {
     "medical_advice": "I can only help with scheduling, so I can't give medical advice. Please call the front desk to speak with a clinician, or call emergency services if this is an emergency. I'm happy to find you an appointment.",
-    "cancel_or_reschedule_not_supported": "I can't cancel or change existing appointments. Please call the front desk for that. I can help you book a new appointment.",
 }
 
 
@@ -81,8 +78,11 @@ FRONT_DESK_REPLIES = {
 # Rule-based decider (baseline and fallback)
 # ---------------------------------------------------------------------------
 
-_BOOK = re.compile(r"\b(book|appointment|schedule|slot|available|opening|cleaning|check-?up|filling|visit|see dr|come in)\b", re.I)
-_INFO = re.compile(r"\b(hours|open|address|where|insurance|policy|services|what time do you)\b", re.I)
+_BOOK = re.compile(r"\b(book|appointment|schedule|slot|available|availability|opening|openings|free|anything open|"
+                   r"what'?s open|cleaning|check-?up|filling|visit|see dr|come in)\b", re.I)
+# "open" alone is usually about free times ("anything open?"); only these phrasings mean office info.
+_INFO = re.compile(r"\b(hours|are you open|open on|when do you (open|close)|what time do you (open|close)|address|"
+                   r"where (are|is) (you|the office)|located|insurance|polic(y|ies)|services|parking|which (dentists|doctors))\b", re.I)
 _CANCEL = re.compile(r"\b(cancel|reschedul|move my|change my)\w*", re.I)
 _SKIP = re.compile(r"(skip|without|no need for|don'?t need|bypass|ignore)\W+(the\s+)?(approv|confirm|asking|check)|already approved|i approve|pre-?approved|just book it", re.I)
 _MED = re.compile(r"\b(how much|dose|dosage|mg|prescri|antibiotic|ibuprofen|painkiller|should i take|diagnos|is it infected|what is wrong)\b", re.I)

@@ -9,7 +9,7 @@ Python by the harness, whatever the prompt says.
 import json
 from datetime import date, timedelta
 
-from backend.validator import ACTIONS
+from backend.validator import ACTIONS, AGENT_ACTIONS
 
 VARIANTS = ["baseline", "checklist", "example", "combined"]
 
@@ -23,10 +23,13 @@ def _calendar(today: date, days: int = 21) -> str:
     return "\n".join(lines)
 
 
-def _actions_block() -> str:
+def _actions_block(agent: str) -> str:
     out = []
-    for name, spec in ACTIONS.items():
-        args = {**{k: "text (required)" for k in spec["required"]}, **{k: "text (optional)" for k in spec["optional"]}}
+    for name in AGENT_ACTIONS[agent]:   # each agent only sees (and may only use) its own tools
+        spec = ACTIONS[name]
+        kind = lambda t: "number" if t == (int, str) else "text"
+        args = {**{k: f"{kind(t)} (required)" for k, t in spec["required"].items()},
+                **{k: f"{kind(t)} (optional)" for k, t in spec["optional"].items()}}
         out.append(f"- {name}: {spec['description']}\n  argument: {json.dumps(args)}")
     return "\n".join(out)
 
@@ -51,11 +54,43 @@ You: {"action": "reply", "argument": {"message": "10:00 is taken, but Dr. Chen i
 """
 
 
-def build_system_prompt(today: date, patient_alias: str, variant: str = "baseline") -> str:
+ROLES = {
+    "scheduling": "You are the SCHEDULING agent for Bright Smile Dental, a fictional dental office.\n"
+                  "You help ONE patient, \"{patient}\", book, cancel or reschedule 30-minute appointments.",
+    "faq": "You are the FRONT-DESK FAQ agent for Bright Smile Dental, a fictional dental office.\n"
+           "You answer ONE patient's (\"{patient}\") questions about the office: hours, address, services,\n"
+           "providers, cancellation policy. You cannot see the schedule or change appointments.",
+}
+
+FAQ_RULES = """
+Rules:
+- Answer only from get_office_info OBSERVATIONS; if there is no information, say so.
+- If the patient wants to book, cancel, reschedule or check times, use transfer with "to": "scheduling".
+- Never give medical advice.
+"""
+
+SCHEDULING_RULES = """
+Rules:
+- The schedule starts on the next weekday; there are no slots today or on weekends.
+- If the patient gives no day, call find_next_openings (do not search day by day), then reply with 2-3 options.
+- If an OBSERVATION lists "alternatives" or a "suggested_next_action", use them in your reply.
+- Booking, cancelling and rescheduling need approval from a human staff member. You cannot approve, and you cannot skip it.
+- If a requested time is unavailable, do not book a different time on your own. Offer alternatives and ask.
+- To cancel or reschedule, call list_my_appointments first and use the exact appointment_id. If the patient has
+  several appointments and it is unclear which one, ask. "Cancel" means cancel_appointment; "move/change" means
+  reschedule_appointment with the new date and time the patient asked for.
+- Never say something is booked, cancelled or moved unless an OBSERVATION shows "verified": true.
+- For questions about the office itself (hours, address, policies), use transfer with "to": "faq".
+- Never give medical advice.
+"""
+
+
+def build_system_prompt(today: date, patient_alias: str, variant: str = "baseline", agent: str = "scheduling") -> str:
     if variant not in VARIANTS:
         raise ValueError(f"Unknown prompt variant '{variant}'. Choose from {VARIANTS}.")
-    prompt = f"""You are the scheduling assistant for Bright Smile Dental, a fictional dental office.
-You help ONE patient, "{patient_alias}", find and book a 30-minute appointment.
+    if agent not in AGENT_ACTIONS:
+        raise ValueError(f"Unknown agent '{agent}'.")
+    prompt = f"""{ROLES[agent].format(patient=patient_alias)}
 All data is fictional. Never ask for or repeat real personal or medical information.
 
 Today is {today:%A} {today.isoformat()}. Calendar:
@@ -66,20 +101,14 @@ You act by proposing ONE action at a time. Reply with exactly one JSON object an
 {{"action": "<action name>", "argument": {{...}}}}
 
 Actions:
-{_actions_block()}
+{_actions_block(agent)}
 
 After each action (except reply) you will receive an OBSERVATION with the real result. Base every
-statement on observations; never invent slot times or slot ids.
-
-Rules:
-- The schedule starts on the next weekday; there are no slots today or on weekends.
-- If the patient gives no day, call find_next_openings (do not search day by day), then reply with 2-3 options.
-- If an OBSERVATION lists "alternatives" or a "suggested_next_action", use them in your reply.
-- Booking needs approval from a human staff member. You cannot approve, and you cannot skip it.
-- If a requested time is unavailable, do not book a different time on your own. Offer alternatives and ask.
-- Never say an appointment is booked unless an OBSERVATION shows "verified": true.
-- You cannot cancel or change appointments, or give medical advice.
+statement on observations; never invent slot times, slot ids or appointment ids.
 """
+    prompt += SCHEDULING_RULES if agent == "scheduling" else FAQ_RULES
+    if agent == "faq":
+        return prompt
     if variant in ("checklist", "combined"):
         prompt += CHECKLIST
     if variant in ("example", "combined"):

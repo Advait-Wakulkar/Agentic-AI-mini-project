@@ -36,6 +36,8 @@ def show_step(s: dict) -> None:
         print(f"{C['dim']}  TOOL OBSERVATION: {json.dumps(s['observation'])[:400]}{C['x']}")
     elif k == "HUMAN_DECISION":
         print(f"  HUMAN DECISION: {'approved' if s['approved'] else 'denied'} via {s['channel']} (approval #{s['approval_id']})")
+    elif k in ("ROUTER", "HANDOFF"):
+        print(f"{C['y']}  {k}: -> {s['to_agent']} agent ({s.get('reason') or 'requested by ' + s.get('from_agent', '?')}){C['x']}")
     elif k == "VERIFY":
         col = C["g"] if s["verified"] else C["r"]
         print(f"{col}  VERIFY (re-read DB): saved={s['saved'].get('ok')} verified={s['verified']}{C['x']}")
@@ -50,8 +52,16 @@ def show_step(s: dict) -> None:
 def terminal_approver(request: dict) -> bool:
     print(f"\n{C['y']}{C['b']}  APPROVAL NEEDED (staff only){C['x']}")
     print(f"  Patient asked: \"{request.get('patient_request', '?')}\"")
-    print(f"  Book {request['patient_alias']} on {request['date']} at {request['time']} with "
-          f"{request['provider']} for '{request['reason']}' (slot {request['slot_id']})?")
+    action = request.get("action", "book")
+    when = f"{request['date']} at {request['time']} with {request['provider']}"
+    if action == "cancel":
+        print(f"  CANCEL {request['patient_alias']}'s appointment #{request['appointment_id']} on {when}?")
+    elif action == "reschedule":
+        f = request["from"]
+        print(f"  MOVE {request['patient_alias']}'s appointment #{request['appointment_id']} from "
+              f"{f['date']} {f['time']} ({f['provider']}) to {when}?")
+    else:
+        print(f"  BOOK {request['patient_alias']} on {when} for '{request['reason']}' (slot {request['slot_id']})?")
     answer = input(f"  Approve? [y/N] ").strip().lower()
     return answer in ("y", "yes")
 

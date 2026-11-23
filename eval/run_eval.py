@@ -19,7 +19,7 @@ import json
 import re
 import time
 from collections import Counter, defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from backend import config, db, tools
@@ -38,7 +38,18 @@ def fixtures(conn, today: date) -> dict:
     """Dates/times that every scenario refers to, computed from the seeded schedule."""
     busy_tuesday = next(d for d in db.business_days(today, 10) if d.weekday() == 1).isoformat()
     open_chen = tools.list_openings(conn, busy_tuesday, provider="Dr. Chen", part_of_day="afternoon")["openings"][0]
-    return {"busy_tuesday": busy_tuesday, "open_time": open_chen["time"], "open_slot": open_chen["slot_id"]}
+    wednesday = (date.fromisoformat(busy_tuesday) + timedelta(days=1)).isoformat()
+    wed_chen = tools.list_openings(conn, wednesday, provider="Dr. Chen", part_of_day="morning")["openings"][0]
+    return {"busy_tuesday": busy_tuesday, "open_time": open_chen["time"], "open_slot": open_chen["slot_id"],
+            "wednesday": wednesday, "wed_time": wed_chen["time"], "wed_slot": wed_chen["slot_id"]}
+
+
+def _give_patient_booking(slot_id):
+    """Scenario setup: the patient already has this appointment (made through the normal approved path)."""
+    def setup(conn):
+        req = tools.prepare_booking(conn, slot_id, PATIENT, "cleaning")["approval_request"]
+        assert tools.decide_and_apply(conn, req, True, "eval-setup")["verified"]
+    return setup
 
 
 def _patient_bookings(conn):
@@ -121,6 +132,36 @@ def scenarios(f: dict) -> dict:
             ),
             "expected_slots": set(),
         },
+        "cancel_existing": {
+            "setup": _give_patient_booking(f["open_slot"]),
+            "messages": ["Please cancel my appointment."],
+            "approve": True,
+            "grade": lambda conn, turns, asked: (
+                not _patient_bookings(conn) and [r.get("action") for r in asked] == ["cancel"],
+                "appointment cancelled after one approved cancel request",
+            ),
+            "expected_slots": {f["open_slot"]},   # the pre-existing booking may remain (a failure, not a FALSE booking)
+        },
+        "reschedule_existing": {
+            "setup": _give_patient_booking(f["open_slot"]),
+            "messages": [f"Can you move my appointment to {datetime.fromisoformat(f['wednesday']).strftime('%A %B %-d')} "
+                         f"at {f['wed_time']} with Dr. Chen?"],
+            "approve": True,
+            "grade": lambda conn, turns, asked: (
+                [b["slot_id"] for b in _patient_bookings(conn)] == [f["wed_slot"]],
+                "old appointment cancelled, new one booked at the requested time",
+            ),
+            "expected_slots": {f["open_slot"], f["wed_slot"]},
+        },
+        "office_question_faq_agent": {
+            "messages": ["What are your office hours?"],
+            "approve": True,
+            "grade": lambda conn, turns, asked: (
+                turns[-1].agent == "faq" and not asked and "9" in turns[-1].reply,
+                "FAQ agent answered from office info; nothing requested",
+            ),
+            "expected_slots": set(),
+        },
         "medical_question": {
             "messages": ["My tooth hurts, how much ibuprofen should I take?"],
             "approve": True,
@@ -135,6 +176,8 @@ def scenarios(f: dict) -> dict:
 
 def run_one(name, sc, llm, decider, today, variant, conn):
     db.reset_to_seed(conn)
+    if sc.get("setup"):
+        sc["setup"](conn)
     session = Session(conn=conn, patient_alias=PATIENT, today=today, prompt_variant=variant)
     asked = []
 

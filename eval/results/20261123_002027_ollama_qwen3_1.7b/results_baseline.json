@@ -1,0 +1,1930 @@
+[
+  {
+    "scenario": "cancel_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "appointment cancelled after one approved cancel request",
+    "stop_reasons": [
+      "cancelled_verified"
+    ],
+    "model_steps": 3,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [],
+    "final_reply": "Your appointment has been successfully canceled. Thank you for your understanding.",
+    "seconds": 7.7,
+    "trace": [
+      {
+        "user": "Please cancel my appointment.",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 123, \"reason\": \"Patient wants to cancel their appointment.\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 123,
+                "reason": "Patient wants to cancel their appointment."
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 114,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ],
+              "suggested_next_action": {
+                "action": "cancel_appointment",
+                "argument": {
+                  "appointment_id": 114,
+                  "reason": "Patient wants to cancel their appointment."
+                }
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 114, \"reason\": \"Patient wants to cancel their appointment.\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 114,
+                "reason": "Patient wants to cancel their appointment."
+              }
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "cancel",
+              "appointment_id": 114,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel their appointment.",
+              "patient_request": "Please cancel my appointment."
+            },
+            "request_id": 1
+          },
+          {
+            "step": 10,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "cancel",
+              "appointment_id": 114,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel their appointment.",
+              "patient_request": "Please cancel my appointment."
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "cancel",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261124-1330-P2"
+          },
+          {
+            "step": 12,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "cancel_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "cancel",
+              "request": {
+                "action": "cancel",
+                "appointment_id": 114,
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Patient wants to cancel their appointment.",
+                "patient_request": "Please cancel my appointment."
+              }
+            }
+          },
+          {
+            "step": 13,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment has been successfully canceled. Thank you for your understanding.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully canceled. Thank you for your understanding."
+              }
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 15,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 16,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "cancelled_verified",
+            "reply": "Your appointment has been successfully canceled. Thank you for your understanding."
+          }
+        ],
+        "reply": "Your appointment has been successfully canceled. Thank you for your understanding."
+      }
+    ],
+    "run": 1,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "cancel_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "appointment cancelled after one approved cancel request",
+    "stop_reasons": [
+      "cancelled_verified"
+    ],
+    "model_steps": 3,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [],
+    "final_reply": "Your appointment has been successfully canceled. Thank you for your understanding!",
+    "seconds": 3.7,
+    "trace": [
+      {
+        "user": "Please cancel my appointment.",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 123, \"reason\": \"Patient wants to cancel their appointment.\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 123,
+                "reason": "Patient wants to cancel their appointment."
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 115,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ],
+              "suggested_next_action": {
+                "action": "cancel_appointment",
+                "argument": {
+                  "appointment_id": 115,
+                  "reason": "Patient wants to cancel their appointment."
+                }
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 115, \"reason\": \"Patient wants to cancel their appointment.\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 115,
+                "reason": "Patient wants to cancel their appointment."
+              }
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "cancel",
+              "appointment_id": 115,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel their appointment.",
+              "patient_request": "Please cancel my appointment."
+            },
+            "request_id": 2
+          },
+          {
+            "step": 10,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "cancel",
+              "appointment_id": 115,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel their appointment.",
+              "patient_request": "Please cancel my appointment."
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "cancel",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261124-1330-P2"
+          },
+          {
+            "step": 12,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "cancel_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "cancel",
+              "request": {
+                "action": "cancel",
+                "appointment_id": 115,
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Patient wants to cancel their appointment.",
+                "patient_request": "Please cancel my appointment."
+              }
+            }
+          },
+          {
+            "step": 13,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment has been successfully canceled. Thank you for your understanding!\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully canceled. Thank you for your understanding!"
+              }
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 15,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 16,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "cancelled_verified",
+            "reply": "Your appointment has been successfully canceled. Thank you for your understanding!"
+          }
+        ],
+        "reply": "Your appointment has been successfully canceled. Thank you for your understanding!"
+      }
+    ],
+    "run": 2,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "cancel_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "appointment cancelled after one approved cancel request",
+    "stop_reasons": [
+      "cancelled_verified"
+    ],
+    "model_steps": 3,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [],
+    "final_reply": "Your appointment has been successfully canceled. Thank you for your understanding.",
+    "seconds": 3.7,
+    "trace": [
+      {
+        "user": "Please cancel my appointment.",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 123, \"reason\": \"Patient wants to cancel the appointment\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 123,
+                "reason": "Patient wants to cancel the appointment"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 116,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ],
+              "suggested_next_action": {
+                "action": "cancel_appointment",
+                "argument": {
+                  "appointment_id": 116,
+                  "reason": "Patient wants to cancel the appointment"
+                }
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 116, \"reason\": \"Patient wants to cancel the appointment\"}}",
+            "proposal": {
+              "action": "cancel_appointment",
+              "argument": {
+                "appointment_id": 116,
+                "reason": "Patient wants to cancel the appointment"
+              }
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "cancel",
+              "appointment_id": 116,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel the appointment",
+              "patient_request": "Please cancel my appointment."
+            },
+            "request_id": 3
+          },
+          {
+            "step": 10,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "cancel",
+              "appointment_id": 116,
+              "slot_id": "S-20261124-1330-P2",
+              "date": "2026-11-24",
+              "time": "13:30",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Patient wants to cancel the appointment",
+              "patient_request": "Please cancel my appointment."
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "cancel",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261124-1330-P2"
+          },
+          {
+            "step": 12,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "cancel_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "cancel",
+              "request": {
+                "action": "cancel",
+                "appointment_id": 116,
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Patient wants to cancel the appointment",
+                "patient_request": "Please cancel my appointment."
+              }
+            }
+          },
+          {
+            "step": 13,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment has been successfully canceled. Thank you for your understanding.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully canceled. Thank you for your understanding."
+              }
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 15,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 16,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "cancelled_verified",
+            "reply": "Your appointment has been successfully canceled. Thank you for your understanding."
+          }
+        ],
+        "reply": "Your appointment has been successfully canceled. Thank you for your understanding."
+      }
+    ],
+    "run": 3,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "reschedule_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "old appointment cancelled, new one booked at the requested time",
+    "stop_reasons": [
+      "rescheduled_verified"
+    ],
+    "model_steps": 4,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [
+      "S-20261125-0900-P2"
+    ],
+    "final_reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!",
+    "seconds": 7.3,
+    "trace": [
+      {
+        "user": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 1, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 1,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 117,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"list_my_appointments\", \"argument\": {}}",
+            "proposal": {
+              "action": "list_my_appointments",
+              "argument": {}
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "list_my_appointments",
+            "observation": {
+              "ok": true,
+              "appointments": [
+                {
+                  "appointment_id": 117,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 10,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 117, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 117,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 12,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 117,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            },
+            "request_id": 4
+          },
+          {
+            "step": 13,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 117,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "reschedule",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261125-0900-P2"
+          },
+          {
+            "step": 15,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "reschedule_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "reschedule",
+              "request": {
+                "action": "reschedule",
+                "appointment_id": 117,
+                "slot_id": "S-20261125-0900-P2",
+                "date": "2026-11-25",
+                "time": "09:00",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "from": {
+                  "slot_id": "S-20261124-1330-P2",
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen"
+                },
+                "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+              }
+            }
+          },
+          {
+            "step": 16,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"message\": \"Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!\"}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+              },
+              "_repaired": true
+            }
+          },
+          {
+            "step": 17,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 18,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 19,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "rescheduled_verified",
+            "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+          }
+        ],
+        "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+      }
+    ],
+    "run": 1,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "reschedule_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "old appointment cancelled, new one booked at the requested time",
+    "stop_reasons": [
+      "rescheduled_verified"
+    ],
+    "model_steps": 4,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [
+      "S-20261125-0900-P2"
+    ],
+    "final_reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!",
+    "seconds": 7.2,
+    "trace": [
+      {
+        "user": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 1, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 1,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 119,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"list_my_appointments\", \"argument\": {}}",
+            "proposal": {
+              "action": "list_my_appointments",
+              "argument": {}
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "list_my_appointments",
+            "observation": {
+              "ok": true,
+              "appointments": [
+                {
+                  "appointment_id": 119,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 10,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 119, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 119,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 12,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 119,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            },
+            "request_id": 5
+          },
+          {
+            "step": 13,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 119,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "reschedule",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261125-0900-P2"
+          },
+          {
+            "step": 15,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "reschedule_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "reschedule",
+              "request": {
+                "action": "reschedule",
+                "appointment_id": 119,
+                "slot_id": "S-20261125-0900-P2",
+                "date": "2026-11-25",
+                "time": "09:00",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "from": {
+                  "slot_id": "S-20261124-1330-P2",
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen"
+                },
+                "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+              }
+            }
+          },
+          {
+            "step": 16,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"message\": \"Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!\"}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+              },
+              "_repaired": true
+            }
+          },
+          {
+            "step": 17,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 18,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 19,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "rescheduled_verified",
+            "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+          }
+        ],
+        "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. Let me know if you need any further assistance!"
+      }
+    ],
+    "run": 2,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "reschedule_existing",
+    "success": true,
+    "false_booking": false,
+    "criterion": "old appointment cancelled, new one booked at the requested time",
+    "stop_reasons": [
+      "rescheduled_verified"
+    ],
+    "model_steps": 4,
+    "rejected_proposals": 1,
+    "approvals_requested": 1,
+    "bookings": [
+      "S-20261125-0900-P2"
+    ],
+    "final_reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. The original appointment at 13:30 has been cancelled.",
+    "seconds": 7.3,
+    "trace": [
+      {
+        "user": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "cancel_or_reschedule",
+              "intent_probs": {
+                "book": 0.08,
+                "ask_info": 0.0,
+                "cancel_or_reschedule": 0.8,
+                "other": 0.12
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.8,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=cancel_or_reschedule"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 1, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 1,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": false,
+            "errors": [
+              "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+            ]
+          },
+          {
+            "step": 6,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'look_up_first': you used an appointment_id without looking it up. Here are the patient's real appointments; use one of these ids."
+              ],
+              "your_appointments": [
+                {
+                  "appointment_id": 121,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 7,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"list_my_appointments\", \"argument\": {}}",
+            "proposal": {
+              "action": "list_my_appointments",
+              "argument": {}
+            }
+          },
+          {
+            "step": 8,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 9,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "list_my_appointments",
+            "observation": {
+              "ok": true,
+              "appointments": [
+                {
+                  "appointment_id": 121,
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen",
+                  "reason": "cleaning"
+                }
+              ]
+            }
+          },
+          {
+            "step": 10,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reschedule_appointment\", \"argument\": {\"appointment_id\": 121, \"new_date\": \"2026-11-25\", \"new_time\": \"09:00\", \"reason\": \"Move to Wednesday November 25 at 09:00 with Dr. Chen\", \"provider\": \"Dr. Chen\"}}",
+            "proposal": {
+              "action": "reschedule_appointment",
+              "argument": {
+                "appointment_id": 121,
+                "new_date": "2026-11-25",
+                "new_time": "09:00",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "provider": "Dr. Chen"
+              }
+            }
+          },
+          {
+            "step": 11,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 12,
+            "kind": "APPROVAL_REQUESTED",
+            "agent": "scheduling",
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 121,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            },
+            "request_id": 6
+          },
+          {
+            "step": 13,
+            "kind": "HUMAN_DECISION",
+            "agent": "scheduling",
+            "approved": true,
+            "channel": "eval-human-stub",
+            "approval_id": 115,
+            "request": {
+              "action": "reschedule",
+              "appointment_id": 121,
+              "slot_id": "S-20261125-0900-P2",
+              "date": "2026-11-25",
+              "time": "09:00",
+              "provider": "Dr. Chen",
+              "patient_alias": "Test Patient A",
+              "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+              "from": {
+                "slot_id": "S-20261124-1330-P2",
+                "date": "2026-11-24",
+                "time": "13:30",
+                "provider": "Dr. Chen"
+              },
+              "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+            }
+          },
+          {
+            "step": 14,
+            "kind": "VERIFY",
+            "agent": "scheduling",
+            "action": "reschedule",
+            "saved": {
+              "ok": true
+            },
+            "verified": true,
+            "slot_id": "S-20261125-0900-P2"
+          },
+          {
+            "step": 15,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "reschedule_appointment",
+            "observation": {
+              "ok": true,
+              "approved": true,
+              "verified": true,
+              "action": "reschedule",
+              "request": {
+                "action": "reschedule",
+                "appointment_id": 121,
+                "slot_id": "S-20261125-0900-P2",
+                "date": "2026-11-25",
+                "time": "09:00",
+                "provider": "Dr. Chen",
+                "patient_alias": "Test Patient A",
+                "reason": "Move to Wednesday November 25 at 09:00 with Dr. Chen",
+                "from": {
+                  "slot_id": "S-20261124-1330-P2",
+                  "date": "2026-11-24",
+                  "time": "13:30",
+                  "provider": "Dr. Chen"
+                },
+                "patient_request": "Can you move my appointment to Wednesday November 25 at 09:00 with Dr. Chen?"
+              }
+            }
+          },
+          {
+            "step": 16,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. The original appointment at 13:30 has been cancelled.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. The original appointment at 13:30 has been cancelled."
+              }
+            }
+          },
+          {
+            "step": 17,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 18,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 19,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "rescheduled_verified",
+            "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. The original appointment at 13:30 has been cancelled."
+          }
+        ],
+        "reply": "Your appointment has been successfully rescheduled to Wednesday, November 25 at 09:00 with Dr. Chen. The original appointment at 13:30 has been cancelled."
+      }
+    ],
+    "run": 3,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "office_question_faq_agent",
+    "success": true,
+    "false_booking": false,
+    "criterion": "FAQ agent answered from office info; nothing requested",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.",
+    "seconds": 2.7,
+    "trace": [
+      {
+        "user": "What are your office hours?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "ask_info",
+              "intent_probs": {
+                "book": 0.0,
+                "ask_info": 0.769,
+                "cancel_or_reschedule": 0.0,
+                "other": 0.231
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.769,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "faq",
+            "reason": "intent=ask_info"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"get_office_info\", \"argument\": {\"topic\": \"hours\"}}",
+            "proposal": {
+              "action": "get_office_info",
+              "argument": {
+                "topic": "hours"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "faq",
+            "action": "get_office_info",
+            "observation": {
+              "ok": true,
+              "topic": "hours",
+              "info": "Bright Smile Dental is open Monday to Friday, 9:00 to 17:00, closed 12:00-13:00 for lunch. Closed weekends."
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "faq",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "faq",
+            "stop_reason": "replied",
+            "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+          }
+        ],
+        "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+      }
+    ],
+    "run": 1,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "office_question_faq_agent",
+    "success": true,
+    "false_booking": false,
+    "criterion": "FAQ agent answered from office info; nothing requested",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.",
+    "seconds": 1.6,
+    "trace": [
+      {
+        "user": "What are your office hours?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "ask_info",
+              "intent_probs": {
+                "book": 0.0,
+                "ask_info": 0.769,
+                "cancel_or_reschedule": 0.0,
+                "other": 0.231
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.769,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "faq",
+            "reason": "intent=ask_info"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"get_office_info\", \"argument\": {\"topic\": \"hours\"}}",
+            "proposal": {
+              "action": "get_office_info",
+              "argument": {
+                "topic": "hours"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "faq",
+            "action": "get_office_info",
+            "observation": {
+              "ok": true,
+              "topic": "hours",
+              "info": "Bright Smile Dental is open Monday to Friday, 9:00 to 17:00, closed 12:00-13:00 for lunch. Closed weekends."
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "faq",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "faq",
+            "stop_reason": "replied",
+            "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+          }
+        ],
+        "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+      }
+    ],
+    "run": 2,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "office_question_faq_agent",
+    "success": true,
+    "false_booking": false,
+    "criterion": "FAQ agent answered from office info; nothing requested",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.",
+    "seconds": 1.6,
+    "trace": [
+      {
+        "user": "What are your office hours?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "rules",
+            "decision": {
+              "intent": "ask_info",
+              "intent_probs": {
+                "book": 0.0,
+                "ask_info": 0.769,
+                "cancel_or_reschedule": 0.0,
+                "other": 0.231
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "rules",
+              "confidence": 0.769,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "faq",
+            "reason": "intent=ask_info"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"get_office_info\", \"argument\": {\"topic\": \"hours\"}}",
+            "proposal": {
+              "action": "get_office_info",
+              "argument": {
+                "topic": "hours"
+              }
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "faq",
+            "action": "get_office_info",
+            "observation": {
+              "ok": true,
+              "topic": "hours",
+              "info": "Bright Smile Dental is open Monday to Friday, 9:00 to 17:00, closed 12:00-13:00 for lunch. Closed weekends."
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "faq",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "faq",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "faq",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "faq",
+            "stop_reason": "replied",
+            "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+          }
+        ],
+        "reply": "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+      }
+    ],
+    "run": 3,
+    "variant": "baseline"
+  }
+]

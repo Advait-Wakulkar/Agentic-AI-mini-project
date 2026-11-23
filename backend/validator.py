@@ -41,11 +41,39 @@ ACTIONS = {
         "optional": {},
         "description": "Request to book an open slot_id for the current patient. A human must approve; you cannot approve it yourself.",
     },
+    "list_my_appointments": {
+        "required": {},
+        "optional": {},
+        "description": "The current patient's upcoming appointments, with their appointment_id.",
+    },
+    "cancel_appointment": {
+        "required": {"appointment_id": (int, str), "reason": str},
+        "optional": {},
+        "description": "Request to cancel one of the patient's appointments (appointment_id from list_my_appointments). A human must approve.",
+    },
+    "reschedule_appointment": {
+        "required": {"appointment_id": (int, str), "new_date": str, "new_time": str, "reason": str},
+        "optional": {"provider": str},
+        "description": "Request to move one of the patient's appointments to new_date (YYYY-MM-DD) at new_time (HH:MM). "
+                       "A human must approve.",
+    },
+    "transfer": {
+        "required": {"to": str},
+        "optional": {},
+        "description": "Hand the conversation to another agent: 'scheduling' (book, cancel, reschedule) or 'faq' (office questions).",
+    },
     "reply": {
         "required": {"message": str},
         "optional": {},
         "description": "Send a message to the patient and end your turn (answer, question, or alternatives).",
     },
+}
+
+# Each agent may only use its own tools (least privilege). The validator enforces this.
+AGENT_ACTIONS = {
+    "scheduling": ["list_openings", "find_next_openings", "check_availability", "list_my_appointments",
+                   "book_appointment", "cancel_appointment", "reschedule_appointment", "transfer", "reply"],
+    "faq": ["get_office_info", "transfer", "reply"],
 }
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -78,14 +106,18 @@ def parse_proposal(text: str) -> tuple[dict | None, str | None]:
     return obj, None
 
 
-def validate(proposal: dict, today: date, conn=None) -> list[str]:
+def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -> list[str]:
     """Return the list of failed checks. An empty list means the proposal is allowed."""
     errors: list[str] = []
     action = proposal.get("action")
     if not isinstance(action, str):
         return ["check 'action_present': missing or non-text 'action' field."]
     if action not in ACTIONS:
-        return [f"check 'known_action': '{action}' is not an allowed action. Allowed: {', '.join(ACTIONS)}."]
+        allowed_list = AGENT_ACTIONS[agent] if agent else list(ACTIONS)
+        return [f"check 'known_action': '{action}' is not an allowed action. Allowed: {', '.join(allowed_list)}."]
+    if agent and action not in AGENT_ACTIONS[agent]:
+        return [f"check 'agent_tools': the {agent} agent cannot use '{action}'. It can use: "
+                f"{', '.join(AGENT_ACTIONS[agent])}. Use transfer if another agent should handle this."]
 
     unknown_top = set(proposal) - {"action", "argument", "thought", "_repaired"}
     if unknown_top:
@@ -104,11 +136,14 @@ def validate(proposal: dict, today: date, conn=None) -> list[str]:
             # This also blocks a model trying to pass its own 'approval' or 'patient_alias'.
             errors.append(f"check 'no_extra_args': '{name}' is not an argument of '{action}'.")
         elif value is not None and not isinstance(value, allowed[name]):
-            errors.append(f"check 'arg_type': '{name}' must be text, got {type(value).__name__}.")
+            want = "a number" if allowed[name] == (int, str) else "text"
+            errors.append(f"check 'arg_type': '{name}' must be {want}, got {type(value).__name__}.")
     if errors:
         return errors
 
     # Value checks.
+    if "new_date" in arg or "new_time" in arg:   # reschedule uses the same date/time checks
+        arg = {**arg, "date": arg.get("new_date", arg.get("date")), "time": arg.get("new_time", arg.get("time"))}
     if "date" in arg:
         if not DATE_RE.match(arg["date"]):
             errors.append("check 'date_format': date must be YYYY-MM-DD.")
@@ -130,6 +165,10 @@ def validate(proposal: dict, today: date, conn=None) -> list[str]:
             errors.append(f"check 'slot_exists': slot '{arg['slot_id']}' does not exist.")
         if not arg["reason"].strip():
             errors.append("check 'reason_nonempty': give a short visit reason, e.g. 'cleaning'.")
+    if "appointment_id" in arg and not str(arg["appointment_id"]).strip().isdigit():
+        errors.append("check 'appointment_id': use the numeric appointment_id from list_my_appointments.")
+    if action == "transfer" and arg["to"] not in AGENT_ACTIONS:
+        errors.append(f"check 'transfer_target': 'to' must be one of {', '.join(AGENT_ACTIONS)}.")
     if action == "reply" and not arg["message"].strip():
         errors.append("check 'message_nonempty': the reply message is empty.")
     return errors

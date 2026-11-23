@@ -18,6 +18,12 @@ except ImportError:  # python-dotenv is optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # Supabase (or any Postgres) connection string. Required.
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+
+# Supabase Auth (optional). With both set, patients sign in; without them the UI runs in demo mode.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+# Who may use the staff dashboard (comma-separated emails).
+STAFF_EMAILS = {e.strip().lower() for e in os.environ.get("STAFF_EMAILS", "").split(",") if e.strip()}
 EVIDENCE_DIR = Path(os.environ.get("EVIDENCE_DIR", PROJECT_ROOT / "evidence"))
 
 # Which language model proposes actions: ollama (local), groq or claude (hosted).

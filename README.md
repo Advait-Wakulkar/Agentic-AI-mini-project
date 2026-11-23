@@ -1,9 +1,10 @@
 # Bright Smile Dental: Appointment Scheduling Agent with Human Approval
 
-CSYE 7374 Agentic AI mini-project. A text agent books **pretend** appointments at a fictional dental
-office. A language model decides which tool to use next. Python validates every proposal, runs
-the tools, and requires a **human** to approve before anything is saved. All data is fictional:
-patients are aliases like `Test Patient A`.
+CSYE 7374 Agentic AI mini-project. Agents **book, cancel and reschedule** pretend appointments at a
+fictional dental office, and answer questions about it. A front-desk **router** sends each message to a
+**scheduling agent** or an **FAQ agent**; each agent's language model decides which of *its own* tools
+to use next. Python validates every proposal, runs the tools, and nothing changes until a **staff member**
+approves it on the dashboard. All data is fictional: patients are aliases like `Test Patient A`.
 
 ## Quick start
 
@@ -24,13 +25,28 @@ Two terminals:
 npm --prefix frontend install && npm --prefix frontend run dev   # UI at http://localhost:3000
 ```
 
-- **Chat** with example prompts for each demo case. Every reply has a **Show agent trace** toggle with each
-  model decision, validation result (rejections in red), tool observation, human decision, DB verification and stop reason.
-- **Staff approval card** appears when the model proposes a booking. The turn is paused and nothing is saved
-  until a person clicks Approve or Deny (`POST /api/approve`); chat input is locked meanwhile.
-- **Schedule grid** (week view, read straight from the database): open, booked, yours, and the slot awaiting approval.
-- **Saved appointments** with the approval id that authorised each one.
-- **Reset schedule** re-seeds the fictional data.
+**Patient chat** (`/`)
+- Example prompts for every case: book, cancel, move, office questions. Each reply shows which agent answered and
+  has a **Show agent trace** toggle: router decision, hand-offs, each model proposal, validation (rejections in red),
+  tool observation, human decision, DB verification and stop reason.
+- Book / cancel / reschedule requests **pause** the chat ("waiting for staff"). Patients have **no approve button**;
+  the chat updates by itself when staff decide (it polls `/api/session/{id}/events`).
+- **My appointments** and a **schedule grid** (open, booked, yours, awaiting approval).
+
+**Staff dashboard** (`/staff`)
+- **Pending queue** of requests from *every* chat, with the patient's own words, the old and new times for a
+  reschedule, and whether the chat is still open. Approve / Deny. Requests are stored in the database, so staff can
+  still decide after a server restart (the change is applied directly; the patient sees it in their list).
+- **History (audit log)**: every human decision, who made it, and the outcome after re-reading the DB.
+- Model picker and **Reset schedule** are staff-only.
+
+**Sign-in (optional, Supabase Auth)**: set `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `STAFF_EMAILS` in `.env`, and
+`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `frontend/.env.local`. Then everyone signs in with
+email + password; each account gets an automatic fictional alias (`Patient 3F9A1C`), and staff are the listed
+emails. A patient's browser reads **My appointments straight from Supabase**, where **Row Level Security** returns
+only their own rows (policy: `patient_alias IN (SELECT alias FROM patients WHERE user_id = auth.uid())`). Without
+these settings the app runs in **demo mode**: a patient dropdown, and anyone can open `/staff`.
+Use test emails (e.g. `patient1@example.com`), and turn off "Confirm email" in Supabase Auth settings for local demos.
 
 The browser only talks to Next.js, which proxies `/api/*` to FastAPI ([frontend/next.config.ts](frontend/next.config.ts)).
 
@@ -60,23 +76,27 @@ your database password in the string. Any other Postgres works too.
 
 | Schema | Used by | Lifetime |
 |---|---|---|
-| `public` | The app: CLI, API, UI | Created and seeded with fictional data on first run; **Reset schedule** re-seeds |
+| `public` | The app: CLI, API, UI | Created and seeded with fictional data on first run (and re-created automatically if the table layout is out of date); **Reset schedule** re-seeds |
 | `test_xxxxxxxx` | One pytest run | Seeded once, reset between tests, dropped at the end |
 | `eval_xxxxxxxx` | One eval run | Reset before every scenario run, dropped at the end |
 
 Tests and evals never touch the app's tables. Row Level Security is enabled on every table, so Supabase's public
 REST API can't read or write them; the app connects as the table owner. Safety rules are enforced in the database
-itself: `UNIQUE(slot_id)` blocks double booking, and `CHECK` limits approval decisions to `approved` or `denied`.
-See [backend/db.py](backend/db.py).
+itself: a partial unique index allows only **one active booking per slot**, cancelled appointments are kept with
+`status = 'cancelled'` for the audit trail, and `CHECK` constraints limit statuses and decisions.
+Tables: `providers`, `patients` (with the Supabase `user_id`), `slots`, `appointments`, `approvals` (one row per
+human decision) and `approval_requests` (the staff queue). See [backend/db.py](backend/db.py).
 
 ## How it works
 
 ```
-User ─▶ Decider (rules | Jev) ─▶ LLM proposes JSON action ─▶ Parser + Validator ─▶ Tool (Python)
-            │ medical / cancel            ▲                        │ rejected                │
-            ▼                             └──── OBSERVATION ◀───────┴─────────────────────────┘
-       Front desk reply                                     book_appointment ─▶ HUMAN approval (y/N)
-                                                                                 ─▶ save ─▶ re-read DB (verify)
+Patient ─▶ Router (decision model: rules | Jev) ──medical──▶ front-desk reply (no LLM)
+              │ intent
+              ├─▶ SCHEDULING agent ─┐   each agent: LLM proposes JSON ─▶ parser + validator
+              └─▶ FAQ agent ────────┤   (only its own tools) ─▶ tool ─▶ OBSERVATION ─▶ next proposal
+                   ▲   transfer     │
+                   └────────────────┘
+book / cancel / reschedule ─▶ staff queue (DB) ─▶ STAFF approve/deny ─▶ apply ─▶ re-read DB (verify) ─▶ agent replies
 ```
 
 | Course idea | Where it is |
@@ -93,7 +113,10 @@ User ─▶ Decider (rules | Jev) ─▶ LLM proposes JSON action ─▶ Parser 
 | Loop detection and step budget (found by eval) | An identical repeated call is not re-run; near the step limit the model is told to reply |
 | Grounded fallbacks | If the model fails, Python's fallback reply lists real open times re-checked in the DB |
 | Stateless model, state in the harness | `Session.history` is resent every call; tests check memory across turns |
-| Stopping decided by Python | `replied`, `booked_verified`, `front_desk`, `too_many_invalid`, `max_steps`, `llm_error`, ... |
+| Stopping decided by Python | `replied`, `booked_verified`, `cancelled_verified`, `rescheduled_verified`, `awaiting_approval`, `front_desk`, `too_many_invalid`, `max_steps`, `llm_error`, ... |
+| Multiple agents, least privilege | A router picks the scheduling or FAQ agent per message; each agent's prompt lists only its tools, and the validator rejects any other (`agent_tools`). Agents hand off with `transfer` (once per turn, and only where the router's intent allows) |
+| Cancel / reschedule safety (found by eval) | The action must match what the patient asked (cancel ≠ move); with several appointments the patient must say which; guessed ids are replaced by the real list (`look_up_first`); reschedule takes a date + time and Python finds the slot; reschedule is book-new + cancel-old in one transaction |
+| Roles | Patients chat, staff approve; enforced by the API (and by Supabase Auth + RLS when sign-in is on) |
 | Decision model (not every decision needs an LLM) | [backend/decision/](backend/decision/__init__.py): fixed choices for intent, skip-approval attempt, medical-advice request, urgency |
 | Jev (TypeSafe) | `DECIDER=jev`: one `system_one` call with `Choice`, `Noul` and `Score` questions; falls back to rules if unavailable |
 | Confidence gating and policies | Confidence = weakest judgement; `strict` / `permissive` thresholds in `route()` |
@@ -107,11 +130,21 @@ User ─▶ Decider (rules | Jev) ─▶ LLM proposes JSON action ─▶ Parser 
 | `list_openings(date, provider?, part_of_day?)` | Open slots on a date |
 | `check_availability(date, time, provider?)` | `available` / `unavailable` / `not_offered` |
 | `get_office_info(topic)` | Hours, address, services, providers, cancellation policy |
-| `book_appointment(slot_id, reason)` | Checks the slot, then **pauses for human approval**, saves, re-reads the DB |
-| `reply(message)` | Answers the patient and ends the turn |
+| `find_next_openings(provider?, part_of_day?)` | Earliest open slots, for "sometime" / "asap" |
+| `book_appointment(slot_id, reason)` | Checks the patient chose this slot, queues it for **staff approval**, saves, re-reads the DB |
+| `list_my_appointments()` | The patient's upcoming appointments with their ids |
+| `cancel_appointment(appointment_id, reason)` | Checks it is theirs and they asked to cancel; **staff approval**; marks it cancelled; re-reads |
+| `reschedule_appointment(appointment_id, new_date, new_time, provider?, reason)` | Finds the new slot; **staff approval**; books new + cancels old atomically; re-reads |
+| `transfer(to)` | Hands the conversation to the other agent |
+| `reply(message)` | Answers the patient and ends the turn (after the output guard) |
 
-There is no delete or cancel tool and no raw SQL. The patient is fixed by the session, so the model
-cannot book for someone else.
+| Agent | Tools it may use |
+|---|---|
+| Scheduling | `list_openings`, `find_next_openings`, `check_availability`, `list_my_appointments`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `transfer`, `reply` |
+| FAQ | `get_office_info`, `transfer`, `reply` |
+
+There is no delete tool and no raw SQL. The patient is fixed by the session (or sign-in), so an agent cannot
+see or change anyone else's appointments.
 
 ## Demo script
 
@@ -131,8 +164,8 @@ The seeded schedule always has Dr. Rivera's first Tuesday morning fully booked.
 ## Testing and evaluation
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 125 deterministic tests (scripted fake model, private schema, ~95 s on Supabase)
-.venv/bin/python -m eval.run_eval --runs 5                      # real model, 7 scenarios × 5 runs
+.venv/bin/python -m pytest -q                                   # 152 deterministic tests (scripted fake model, private schema, ~2.5 min on Supabase)
+.venv/bin/python -m eval.run_eval --runs 5                      # real model, 11 scenarios × 5 runs
 .venv/bin/python -m eval.run_eval --runs 1 --variants baseline checklist example combined   # prompt experiment
 .venv/bin/python -m eval.decider_eval --repeats 5 [--jev]       # rules vs LLM (vs Jev)
 ```
@@ -161,6 +194,9 @@ Each failure found by the eval became a Python check and a regression test.
 | UI run, qwen3:4b, 2026-11-22 | booked after human approval | Patient said "yes" to **four** offered times; model picked 09:00 | Patient must pick one option: the only one offered, an ordinal ("the second one"), or its time |
 | `20261122_162002` (+ new `yes_to_several_options`) | 1/3 on new scenario, 0 false bookings | Model replied **"Appointment confirmed…"** with nothing saved; output guard's phrase list missed it | Sentence-level `claims_booking()` check (also used by the eval's false-booking metric); grader accepts questions without "?" |
 | `20261122_162719` (8×3, Supabase) | **24/24, 0 false bookings** | — | — |
+| `20261122_210304` (11×3, + cancel / reschedule / FAQ) | 27/33, 0 false bookings | Cancel and reschedule 0/3: guessed appointment id `123` (real `120`) and slot ids like `"13:45"`; "cancel" became a reschedule | Real ids handed back (`look_up_first`); reschedule by date + time; action must match the request |
+| `20261122_*` (cancel re-run) | cancel 0/3, 0 false changes | After the ids were supplied it **transferred to the FAQ agent**, which replied "canceled" (caught by the output guard) | Hand-offs must agree with the router's intent; suggested real cancel action; cancel-aware fallback reply |
+| `20261123_002411` (11×3, Supabase) | **33/33, 0 false bookings** | — | — |
 
 Three runs per scenario is a small sample, and the fixes were developed against these same scenarios,
 so new wording may still expose failures.
@@ -169,7 +205,8 @@ so new wording may still expose failures.
 
 ```
 backend/
-  agent.py        loop, approval gate, output guard, run records
+  agent.py        router, scheduling + FAQ agents, approval gate, guards, run records
+  auth.py         Supabase Auth sign-in, roles, fictional aliases
   tools.py        deterministic tools over the database
   validator.py    parser + validator
   prompts.py      system prompt + variants for experiments
@@ -177,10 +214,11 @@ backend/
   decision/       rules + Jev decision models, routing
   db.py           Supabase/Postgres access, schemas, fictional seed data
   cli.py          terminal chat with y/N approval
-  api.py          FastAPI for the UI (pause for approval, resume on staff click)
+  api.py          FastAPI: patient chat, staff queue + history, polling
 frontend/         Next.js + TypeScript + Tailwind UI
-  app/page.tsx    chat, approval card, schedule, appointments
-  components/     Trace, ApprovalCard, ScheduleGrid, ModelPicker
+  app/page.tsx    patient chat, my appointments (via RLS when signed in), schedule
+  app/staff/      staff dashboard: pending queue, approve/deny, audit history
+  components/     Trace, ApprovalCard, ScheduleGrid, ModelPicker, Login, useAuth
 eval/             scenario eval and decider eval
 tests/            pytest suite
 evidence/         JSON run records
@@ -189,6 +227,8 @@ evidence/         JSON run records
 ## Limitations
 
 - Fictional office only; there is no real calendar, reminders, or voice yet (planned extensions).
-- The rule decider is keyword-based (75% intent accuracy on the labelled set); it is the baseline Jev is compared with.
+- The rule router is keyword-based (83% intent accuracy on the labelled set); it is the baseline Jev is compared with.
+- Sign-in has been tested with Supabase Auth mocked; a real sign-in needs your project's anon key (see above).
+- Conversations live in server memory; after a restart staff can still decide queued requests, but the chat starts fresh.
 - Small local models make more formatting mistakes; the validator catches them but runs take more steps.
 - Eval sample sizes are small; see each results file for the caveat.

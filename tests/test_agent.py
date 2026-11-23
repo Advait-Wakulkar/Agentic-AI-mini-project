@@ -221,7 +221,7 @@ def test_false_booking_claim_is_sent_back_then_corrected(conn):
     ]
     turn, _, _, _ = run(conn, script, "Book me Tuesday at 9")
     assert turn.stop_reason == "reply_corrected"
-    assert "haven't booked" in turn.reply
+    assert "haven't changed anything" in turn.reply
     assert count_appointments(conn) == 0
 
 
@@ -292,7 +292,7 @@ def test_llm_outage_is_reported_honestly(conn):
     def down(_):
         raise LLMError("connection refused")
     turn, _, _, _ = run(conn, down, "Book Tuesday")
-    assert turn.stop_reason == "llm_error" and "Nothing was booked" in turn.reply
+    assert turn.stop_reason == "llm_error" and "Nothing was changed" in turn.reply
 
 
 def test_memory_across_turns(conn, open_slot):
@@ -348,7 +348,7 @@ def test_model_booking_a_different_option_than_picked_is_corrected(conn):
                                         act("book_appointment", slot_id=offered[1], reason="root canal"),
                                         act("reply", message="Booked for 10:00.")],
                                  "10am please", session=session)
-    assert "Book slot " + offered[1] in llm.calls[1][-1]["content"]
+    assert "Use slot " + offered[1] in llm.calls[1][-1]["content"]
     assert [r["slot_id"] for r in approver.requests] == [offered[1]]
 
 
@@ -386,7 +386,7 @@ def test_corrected_reply_relists_the_offered_times_and_they_stay_pickable(conn):
     turn, _, _, _ = run(conn, [act("reply", message="Appointment confirmed for 09:00!"),
                                act("reply", message="Your appointment is confirmed.")], "yes", session=session)
     assert turn.stop_reason == "reply_corrected"
-    assert turn.reply.startswith("I haven't booked anything yet.") and "Which would you like?" in turn.reply
+    assert turn.reply.startswith("I haven't changed anything yet.") and "Which would you like?" in turn.reply
     for o in session.last_offered:
         assert o["time"] in turn.reply                                    # every offered time is listed again
     assert [o["slot_id"] for o in session.last_offered] == offered        # ...and still counts as offered

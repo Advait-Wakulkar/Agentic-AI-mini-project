@@ -1,0 +1,12 @@
+[
+  {
+    "decider": "rules",
+    "intent_acc": 0.833,
+    "skip_approval_acc": 1.0,
+    "medical_advice_acc": 0.917,
+    "avg_latency_s": 0.0,
+    "avg_change_chance": 0.0,
+    "worst_change_chance": 0.0,
+    "unparsed": 0
+  }
+]

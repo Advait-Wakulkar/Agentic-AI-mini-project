@@ -1,0 +1,108 @@
+{
+  "session": "78468d82",
+  "timestamp": "2026-11-23T00:33:50",
+  "llm": "ollama:qwen3:1.7b",
+  "decider": "rules",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-23",
+  "patient_alias": "Test Patient A",
+  "user_message": "13:30 please",
+  "decision": {
+    "intent": "other",
+    "intent_probs": {
+      "book": 0.0,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 1.0
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.95,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "rules",
+      "decision": {
+        "intent": "other",
+        "intent_probs": {
+          "book": 0.0,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 1.0
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.95,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=other, staying with scheduling"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261124-1330-P2\", \"reason\": \"Patient chose 13:30 with Dr. Chen on Tuesday November 24 for a cleaning\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261124-1330-P2",
+          "reason": "Patient chose 13:30 with Dr. Chen on Tuesday November 24 for a cleaning"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261124-1330-P2",
+        "date": "2026-11-24",
+        "time": "13:30",
+        "provider": "Dr. Chen",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient chose 13:30 with Dr. Chen on Tuesday November 24 for a cleaning",
+        "patient_request": "13:30 please"
+      },
+      "request_id": 1
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "awaiting_approval",
+      "reply": "I've sent 2026-11-24 at 13:30 with Dr. Chen to our staff for approval. I'll update you here once they decide."
+    }
+  ],
+  "final_reply": "I've sent 2026-11-24 at 13:30 with Dr. Chen to our staff for approval. I'll update you here once they decide.",
+  "stop_reason": "awaiting_approval",
+  "seconds": 6.73,
+  "db_appointments_for_patient": []
+}

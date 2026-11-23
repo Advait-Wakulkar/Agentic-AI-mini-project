@@ -4,9 +4,12 @@ The model never runs these itself. It proposes an action, the harness validates
 it, and only then does Python call one of these functions. Each returns a plain
 dict that becomes the model's next OBSERVATION.
 
-There is deliberately no delete or cancel tool, and no raw SQL access.
+There is no delete tool and no raw SQL. Cancel and reschedule exist, but like
+booking they only PREPARE a request; a human approves before anything changes,
+and a cancelled appointment is kept (status='cancelled') for the audit trail.
 """
 
+import json
 from datetime import date, datetime
 
 from backend.db import Database, IntegrityError
@@ -36,7 +39,7 @@ def _slot_rows(conn, where: str, params: tuple):
         "SELECT s.id, s.date, s.start_time, p.name AS provider,"
         " a.id IS NOT NULL AS booked"
         " FROM slots s JOIN providers p ON p.id = s.provider_id"
-        " LEFT JOIN appointments a ON a.slot_id = s.id"
+        " LEFT JOIN appointments a ON a.slot_id = s.id AND a.status = 'booked'"
         f" WHERE {where} ORDER BY s.date, s.start_time, s.provider_id",
         params,
     )
@@ -176,11 +179,25 @@ def prepare_booking(conn, slot_id: str, patient_alias: str, reason: str) -> dict
 
 
 def record_decision(conn, request: dict, approved: bool, decided_by: str) -> int:
+    """Audit log: one row per human decision, for every kind of request."""
     return conn.insert(
-        "INSERT INTO approvals (slot_id, patient_alias, reason, decision, decided_by, decided_at) VALUES (?,?,?,?,?,?)",
-        (request["slot_id"], request["patient_alias"], request["reason"],
-         "approved" if approved else "denied", decided_by, datetime.now().isoformat(timespec="seconds")),
+        "INSERT INTO approvals (action, appointment_id, slot_id, patient_alias, reason, decision, decided_by, decided_at)"
+        " VALUES (?,?,?,?,?,?,?,?)",
+        (request.get("action", "book"), request.get("appointment_id"), request["slot_id"], request["patient_alias"],
+         request["reason"], "approved" if approved else "denied", decided_by, datetime.now().isoformat(timespec="seconds")),
     )
+
+
+def _valid_approval(conn, request: dict, approval_id: int) -> str | None:
+    """None if approval_id is a HUMAN approval of exactly this request, else the reason it is not."""
+    row = conn.one("SELECT * FROM approvals WHERE id = ?", (approval_id,))
+    if row is None or row["decision"] != "approved" or row["decided_by"] in ("model", "seed"):
+        return "No valid human approval for this request."
+    if (row["action"] != request.get("action", "book") or row["slot_id"] != request["slot_id"]
+            or row["patient_alias"] != request["patient_alias"]
+            or (row["appointment_id"] or None) != (request.get("appointment_id") or None)):
+        return "Approval does not match this request."
+    return None
 
 
 def commit_booking(conn, request: dict, approval_id: int) -> dict:
@@ -190,11 +207,9 @@ def commit_booking(conn, request: dict, approval_id: int) -> dict:
     patient. The UNIQUE constraint on slot_id stops double booking even if two
     approvals race for the same slot.
     """
-    row = conn.one("SELECT * FROM approvals WHERE id = ?", (approval_id,))
-    if row is None or row["decision"] != "approved" or row["decided_by"] in ("model", "seed"):
-        return {"ok": False, "error": "No valid human approval for this booking."}
-    if row["slot_id"] != request["slot_id"] or row["patient_alias"] != request["patient_alias"]:
-        return {"ok": False, "error": "Approval does not match this slot and patient."}
+    problem = _valid_approval(conn, request, approval_id)
+    if problem:
+        return {"ok": False, "error": problem}
     try:
         conn.run(
             "INSERT INTO appointments (slot_id, patient_alias, reason, approval_id, created_at) VALUES (?,?,?,?,?)",
@@ -209,26 +224,167 @@ def commit_booking(conn, request: dict, approval_id: int) -> dict:
 def verify_booking(conn, slot_id: str, patient_alias: str) -> bool:
     """Independent check: re-read the database instead of trusting any return value."""
     row = conn.one(
-        "SELECT 1 AS found FROM appointments WHERE slot_id = ? AND patient_alias = ?", (slot_id, patient_alias)
+        "SELECT 1 AS found FROM appointments WHERE slot_id = ? AND patient_alias = ? AND status = 'booked'",
+        (slot_id, patient_alias),
     )
     return row is not None
 
 
-def list_appointments(conn, patient_alias: str | None = None) -> list[dict]:
+def list_appointments(conn, patient_alias: str | None = None, include_cancelled: bool = False) -> list[dict]:
     sql = ("SELECT a.id, a.slot_id, s.date, s.start_time AS time, p.name AS provider, a.patient_alias,"
-           " a.reason, a.approval_id, a.created_at FROM appointments a JOIN slots s ON s.id = a.slot_id"
-           " JOIN providers p ON p.id = s.provider_id")
+           " a.reason, a.approval_id, a.status, a.created_at, a.cancelled_at FROM appointments a"
+           " JOIN slots s ON s.id = a.slot_id JOIN providers p ON p.id = s.provider_id WHERE 1 = 1")
     params: tuple = ()
+    if not include_cancelled:
+        sql += " AND a.status = 'booked'"
     if patient_alias:
-        sql += " WHERE a.patient_alias = ?"
+        sql += " AND a.patient_alias = ?"
         params = (patient_alias,)
     return conn.query(sql + " ORDER BY s.date, s.start_time", params)
 
 
+# ---------------------------------------------------------------------------
+# The patient's own appointments: list, cancel, reschedule.
+# The harness injects patient_alias from the session, so the model can only
+# ever see or change the signed-in patient's own appointments.
+# ---------------------------------------------------------------------------
+
+def list_my_appointments(conn, patient_alias: str) -> dict:
+    rows = list_appointments(conn, patient_alias)
+    return {"ok": True, "appointments": [
+        {"appointment_id": r["id"], "date": r["date"], "time": r["time"], "provider": r["provider"], "reason": r["reason"]}
+        for r in rows
+    ]} if rows else {"ok": True, "appointments": [], "note": "This patient has no upcoming appointments."}
+
+
+def _own_appointment(conn, appointment_id, patient_alias: str) -> dict | None:
+    return conn.one(
+        "SELECT a.id, a.slot_id, s.date, s.start_time AS time, p.name AS provider, a.reason FROM appointments a"
+        " JOIN slots s ON s.id = a.slot_id JOIN providers p ON p.id = s.provider_id"
+        " WHERE a.id = ? AND a.patient_alias = ? AND a.status = 'booked'", (int(appointment_id), patient_alias))
+
+
+def prepare_cancel(conn, appointment_id, patient_alias: str, reason: str) -> dict:
+    appt = _own_appointment(conn, appointment_id, patient_alias)
+    if appt is None:
+        return {"ok": False, "error": f"Appointment {appointment_id} is not an upcoming appointment of this patient. "
+                                      "Use list_my_appointments to see their appointments."}
+    return {"ok": True, "approval_request": {
+        "action": "cancel", "appointment_id": appt["id"], "slot_id": appt["slot_id"], "date": appt["date"],
+        "time": appt["time"], "provider": appt["provider"], "patient_alias": patient_alias, "reason": reason}}
+
+
+def prepare_reschedule(conn, appointment_id, new_slot_id: str, patient_alias: str, reason: str) -> dict:
+    appt = _own_appointment(conn, appointment_id, patient_alias)
+    if appt is None:
+        return {"ok": False, "error": f"Appointment {appointment_id} is not an upcoming appointment of this patient. "
+                                      "Use list_my_appointments to see their appointments."}
+    new = slot_details(conn, new_slot_id)
+    if new is None:
+        return {"ok": False, "error": f"Slot '{new_slot_id}' does not exist."}
+    if new["slot_id"] == appt["slot_id"]:
+        return {"ok": False, "error": "The new time is the same as the current appointment."}
+    if new["booked"]:
+        return {"ok": False, "error": f"{new['date']} {new['time']} with {new['provider']} is already booked. Offer other times."}
+    return {"ok": True, "approval_request": {
+        "action": "reschedule", "appointment_id": appt["id"], "slot_id": new["slot_id"], "date": new["date"],
+        "time": new["time"], "provider": new["provider"], "patient_alias": patient_alias, "reason": reason,
+        "from": {"slot_id": appt["slot_id"], "date": appt["date"], "time": appt["time"], "provider": appt["provider"]}}}
+
+
+def commit_action(conn, request: dict, approval_id: int) -> dict:
+    """Carry out an approved request. Only the harness calls this, with a HUMAN approval id."""
+    action = request.get("action", "book")
+    if action == "book":
+        return commit_booking(conn, request, approval_id)
+    problem = _valid_approval(conn, request, approval_id)
+    if problem:
+        return {"ok": False, "error": problem}
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        with conn.transaction():  # reschedule = book new + cancel old, all or nothing
+            if action == "reschedule":
+                conn.run("INSERT INTO appointments (slot_id, patient_alias, reason, approval_id, created_at)"
+                         " VALUES (?,?,?,?,?)",
+                         (request["slot_id"], request["patient_alias"], request["reason"], approval_id, now))
+            cancelled = conn.query(
+                "UPDATE appointments SET status = 'cancelled', cancelled_at = ?, cancel_approval_id = ?"
+                " WHERE id = ? AND patient_alias = ? AND status = 'booked' RETURNING id",
+                (now, approval_id, request["appointment_id"], request["patient_alias"]))
+            if not cancelled:
+                raise RuntimeError("the appointment was no longer active")
+    except IntegrityError:
+        return {"ok": False, "error": f"{request['date']} {request['time']} was taken before it could be saved."}
+    except RuntimeError as e:
+        return {"ok": False, "error": f"Nothing changed: {e}."}
+    return {"ok": True}
+
+
+def verify_action(conn, request: dict) -> bool:
+    """Independent re-read of the database after an approved request."""
+    action = request.get("action", "book")
+    if action == "book":
+        return verify_booking(conn, request["slot_id"], request["patient_alias"])
+    old = conn.one("SELECT status FROM appointments WHERE id = ? AND patient_alias = ?",
+                   (request["appointment_id"], request["patient_alias"]))
+    old_cancelled = old is not None and old["status"] == "cancelled"
+    if action == "cancel":
+        return old_cancelled
+    return old_cancelled and verify_booking(conn, request["slot_id"], request["patient_alias"])
+
+
 # Read-only tools the model may call directly, by name.
 READ_TOOLS = {
+    "list_my_appointments": list_my_appointments,  # the harness adds patient_alias
     "list_openings": list_openings,
     "find_next_openings": find_next_openings,   # the harness adds from_date=today
     "check_availability": check_availability,
     "get_office_info": get_office_info,
 }
+
+
+# ---------------------------------------------------------------------------
+# Staff approval queue (approval_requests). Every request the agent makes is
+# stored here, so staff can see and decide pending requests from any chat.
+# ---------------------------------------------------------------------------
+
+def create_request(conn, session_id: str, request: dict) -> int:
+    return conn.insert(
+        "INSERT INTO approval_requests (session_id, patient_alias, action, request, created_at) VALUES (?,?,?,?,?)",
+        (session_id, request["patient_alias"], request.get("action", "book"), json.dumps(request),
+         datetime.now().isoformat(timespec="seconds")))
+
+
+def close_request(conn, request_id: int, status: str, decided_by: str, approval_id: int | None, outcome: str) -> None:
+    conn.run("UPDATE approval_requests SET status = ?, decided_at = ?, decided_by = ?, approval_id = ?, outcome = ?"
+             " WHERE id = ?",
+             (status, datetime.now().isoformat(timespec="seconds"), decided_by, approval_id, outcome, request_id))
+
+
+def list_requests(conn, status: str | None = None, limit: int = 100) -> list[dict]:
+    sql, params = "SELECT * FROM approval_requests", ()
+    if status:
+        sql, params = sql + " WHERE status = ?", (status,)
+    rows = conn.query(sql + " ORDER BY id DESC LIMIT ?", params + (limit,))
+    for r in rows:
+        r["request"] = json.loads(r["request"])
+    return rows
+
+
+def get_request(conn, request_id: int) -> dict | None:
+    row = conn.one("SELECT * FROM approval_requests WHERE id = ?", (request_id,))
+    if row:
+        row["request"] = json.loads(row["request"])
+    return row
+
+
+def decide_and_apply(conn, request: dict, approved: bool, decided_by: str) -> dict:
+    """Record a HUMAN decision, carry it out if approved, and re-read the DB. Used by the agent and by staff."""
+    approval_id = record_decision(conn, request, approved, decided_by)
+    if not approved:
+        return {"approval_id": approval_id, "approved": False, "saved": {"ok": False}, "verified": False,
+                "outcome": "denied"}
+    saved = commit_action(conn, request, approval_id)
+    verified = verify_action(conn, request)
+    outcome = "verified" if (saved.get("ok") and verified) else f"not_saved: {saved.get('error', 'could not verify')}"
+    return {"approval_id": approval_id, "approved": True, "saved": saved, "verified": verified, "outcome": outcome}

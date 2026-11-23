@@ -37,5 +37,6 @@ def test_low_confidence_asks_to_clarify():
     assert any("ambiguous" in n for n in route(dec)["notes"])
 
 
-def test_cancel_routes_to_front_desk():
-    assert route(RuleDecider().decide("please cancel my appointment"))["action"] == "front_desk"
+def test_cancel_is_handled_by_the_agents_now():
+    d = RuleDecider().decide("please cancel my appointment")
+    assert d.intent == "cancel_or_reschedule" and route(d)["action"] == "proceed"

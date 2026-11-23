@@ -1,22 +1,33 @@
-"""The agent loop: the model proposes, Python decides and acts.
+"""Agents: a front-desk router, a SCHEDULING agent and an FAQ agent.
 
-One user message = one "turn". Inside a turn the loop repeats:
+One user message = one "turn".
 
+    0. Router (decision model, no LLM): front desk for medical questions,
+       otherwise picks the agent: scheduling (book / cancel / reschedule) or faq.
+    Then the chosen agent's loop repeats:
     1. LLM proposes one action (JSON)              <- model decision
-    2. Python parses + validates it                 <- harness check
-    3. Python runs the tool (or the approval gate)  <- program action
-    4. The result goes back as an OBSERVATION       <- observation
+    2. Python parses + validates it, including     <- harness check
+       "is this tool one THIS agent may use?"
+    3. Python runs the tool, the approval gate,    <- program action
+       or a transfer to the other agent
+    4. The result goes back as an OBSERVATION      <- observation
     5. State is updated; go to 1 until a stop condition
 
+Booking, cancelling and rescheduling all go through the same gate: the request
+is stored in the staff queue, a HUMAN approves or denies, Python carries it out
+and re-reads the database to verify.
+
 Stop conditions are decided by Python, not the model:
-    replied             model chose 'reply' (answer, question, alternatives)
-    booked_verified     a booking was approved by a human, saved, re-read from the DB, then replied
-    awaiting_approval   booking is waiting for a human (UI); resume with resume_turn()
-    front_desk          decider routed the message to staff (medical advice, cancellation)
-    reply_corrected     model claimed a booking that does not exist twice; harness replaced the reply
-    too_many_invalid    MAX_INVALID rejected proposals in one turn
-    max_steps           MAX_STEPS passes without finishing
-    llm_error           the model could not be reached (reported honestly)
+    replied               agent chose 'reply' (answer, question, alternatives)
+    booked_verified       a booking was approved, saved and re-read from the DB
+    cancelled_verified    a cancellation was approved, applied and re-read
+    rescheduled_verified  a reschedule was approved, applied and re-read
+    awaiting_approval     waiting for staff (UI); resumed by resume_turn()
+    front_desk            router sent the message to staff (medical advice)
+    reply_corrected       agent twice claimed something not in the DB; reply replaced
+    too_many_invalid      MAX_INVALID rejected proposals in one turn
+    max_steps             MAX_STEPS passes without finishing
+    llm_error             the model could not be reached (reported honestly)
 """
 
 import json
@@ -36,12 +47,26 @@ from backend.validator import parse_proposal, validate
 # Approver: gets the approval request, returns True (approve), False (deny) or None (decide later, e.g. UI).
 Approver = Callable[[dict], Optional[bool]]
 
+AGENTS = ("scheduling", "faq")
+GATED = {"book_appointment": "book", "cancel_appointment": "cancel", "reschedule_appointment": "reschedule"}
+VERIFIED_STOP = {"book": "booked_verified", "cancel": "cancelled_verified", "reschedule": "rescheduled_verified"}
+
 _CLAIM_WORD = re.compile(r"\b(confirm(ed|ation)|booked|scheduled|reserved|all set|you'?re set|is set)\b", re.I)
+_CHANGE_WORD = re.compile(r"\b(cancell?ed|rescheduled|moved|changed)\b", re.I)
 _NOT_A_CLAIM = re.compile(
     r"\b(not|n't|no|nothing|never|cannot|unable|yet|already|fully|taken|unavailable|"
     r"if|once|after|before|would|shall|should|want|need|can I|could|may I|please (choose|confirm|pick))\b|\?",
     re.I,
 )
+
+
+def _claims(text: str, word: re.Pattern) -> bool:
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        if word.search(sentence) and not _NOT_A_CLAIM.search(sentence):
+            if re.search(r"\b(is|are) booked\b", sentence, re.I) and not re.search(r"\b(you|your)\b", sentence, re.I):
+                continue  # "Dr. Rivera is booked at 9:00" describes the schedule, not the patient's booking
+            return True
+    return False
 
 
 def claims_booking(text: str) -> bool:
@@ -52,17 +77,17 @@ def claims_booking(text: str) -> bool:
     confirm/booked/scheduled/reserved word counts, unless it is negated, a question,
     conditional, or about a time being unavailable ("9:00 is already booked").
     """
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
-        if _CLAIM_WORD.search(sentence) and not _NOT_A_CLAIM.search(sentence):
-            if re.search(r"\b(is|are) booked\b", sentence, re.I) and not re.search(r"\b(you|your)\b", sentence, re.I):
-                continue  # "Dr. Rivera is booked at 9:00" describes the schedule, not the patient's booking
-            return True
-    return False
+    return _claims(text, _CLAIM_WORD)
+
+
+def claims_change(text: str) -> bool:
+    """Does any sentence say an appointment WAS cancelled / rescheduled / moved?"""
+    return _claims(text, _CHANGE_WORD)
 
 
 @dataclass
 class Session:
-    """Everything the agent remembers between turns (the model itself is stateless)."""
+    """Everything the agents remember between turns (the model itself is stateless)."""
     conn: object
     patient_alias: str
     today: date = field(default_factory=config.today)
@@ -71,18 +96,27 @@ class Session:
     history: list[dict] = field(default_factory=list)   # user / assistant / observation messages
     pending: Optional[dict] = None                       # turn paused for human approval
     last_offered: list = field(default_factory=list)     # slots named in the assistant's LAST reply, earliest first
+    active_agent: str = "scheduling"                     # who handled the last turn (follow-ups stay there)
+    last_user_message: str = ""
+    owner_id: Optional[str] = None                       # signed-in user who owns this conversation
+    events: list = field(default_factory=list)           # finished turns the patient UI has not shown yet
 
 
 @dataclass
 class Turn:
     user_message: str
+    agent: str = "scheduling"
     steps: list[dict] = field(default_factory=list)
     invalid: int = 0
     guard_retried: bool = False
+    transferred: bool = False
+    looked_up: bool = False                              # list_my_appointments seen this turn
     unavailable_seen: bool = False                       # requested time turned out to be taken / not offered
     turn_slots: set = field(default_factory=set)         # slot ids returned by tools this turn
     calls_made: set = field(default_factory=set)         # (action, args) already executed this turn
-    booked: Optional[dict] = None
+    booked: Optional[dict] = None                        # verified book or reschedule (the new slot)
+    changed: Optional[dict] = None                       # verified cancel or reschedule
+    done_action: Optional[str] = None
     decision: Optional[dict] = None
     reply: str = ""
     stop_reason: str = ""
@@ -92,7 +126,7 @@ class Turn:
 
 
 def _log(turn: Turn, kind: str, **data):
-    entry = {"step": len(turn.steps) + 1, "kind": kind, **data}
+    entry = {"step": len(turn.steps) + 1, "kind": kind, "agent": turn.agent, **data}
     turn.steps.append(entry)
     if turn.on_step:
         turn.on_step(entry)
@@ -108,20 +142,28 @@ def _observe(session: Session, turn: Turn, obs: dict):
     session.history.append({"role": "user", "content": "OBSERVATION: " + json.dumps(obs)})
 
 
-def _finish_booking(session: Session, turn: Turn, request: dict, approved: bool, channel: str) -> dict:
-    """Record the HUMAN decision, then save and independently verify."""
-    approval_id = tools.record_decision(session.conn, request, approved, channel)
-    _log(turn, "HUMAN_DECISION", approved=approved, channel=channel, approval_id=approval_id, request=request)
+def _finish_request(session: Session, turn: Turn, request: dict, approved: bool, channel: str,
+                    request_id: Optional[int]) -> dict:
+    """Record the HUMAN decision, carry it out, re-read the DB, and close the staff-queue entry."""
+    result = tools.decide_and_apply(session.conn, request, approved, channel)
+    action = request.get("action", "book")
+    _log(turn, "HUMAN_DECISION", approved=approved, channel=channel, approval_id=result["approval_id"], request=request)
+    if request_id is not None:
+        tools.close_request(session.conn, request_id, "approved" if approved else "denied", channel,
+                            result["approval_id"], result["outcome"])
     if not approved:
-        return {"ok": False, "approved": False,
-                "detail": "The staff member DENIED this booking. Nothing was saved. Tell the patient and offer to find another time."}
-    saved = tools.commit_booking(session.conn, request, approval_id)
-    verified = tools.verify_booking(session.conn, request["slot_id"], request["patient_alias"])
-    _log(turn, "VERIFY", saved=saved, verified=verified, slot_id=request["slot_id"])
-    if saved.get("ok") and verified:
-        turn.booked = request
-        return {"ok": True, "approved": True, "verified": True, "appointment": request}
-    return {"ok": False, "approved": True, "verified": False, "error": saved.get("error", "Save could not be verified.")}
+        return {"ok": False, "approved": False, "action": action,
+                "detail": f"The staff member DENIED this {action} request. Nothing changed. Tell the patient."}
+    _log(turn, "VERIFY", action=action, saved=result["saved"], verified=result["verified"], slot_id=request["slot_id"])
+    if result["saved"].get("ok") and result["verified"]:
+        turn.done_action = action
+        if action in ("book", "reschedule"):
+            turn.booked = request
+        if action in ("cancel", "reschedule"):
+            turn.changed = request
+        return {"ok": True, "approved": True, "verified": True, "action": action, "request": request}
+    return {"ok": False, "approved": True, "verified": False, "action": action,
+            "error": result["saved"].get("error", "Could not be verified.")}
 
 
 PROVIDER_NAMES = ["Rivera", "Chen", "Okafor"]
@@ -186,7 +228,7 @@ def _substitution_problem(session: Session, turn: Turn, slot_id: str) -> Optiona
             return (f"check 'patient_chose_slot': {len(offered)} times were offered ({listing}) and the patient's "
                     "reply does not say which one. Ask which time they want; do not pick for them.")
         return (f"check 'patient_chose_slot': the patient picked {chosen['date']} {chosen['time']} with "
-                f"{chosen['provider']}, not this slot. Book slot {chosen['slot_id']} instead.")
+                f"{chosen['provider']}, not this slot. Use slot {chosen['slot_id']} instead.")
     named = [p for p in PROVIDER_NAMES if p.lower() in msg.lower()]
     what = f"{slot['date']} {slot['time']} with {slot['provider']}"
     if named and not any(p in slot["provider"] for p in named):
@@ -199,6 +241,39 @@ def _substitution_problem(session: Session, turn: Turn, slot_id: str) -> Optiona
         return (f"check 'patient_chose_slot': the patient has not chosen {what} (the {missing} does not match their "
                 "message). Reply with 2-3 options and let the patient choose before booking.")
     return None
+
+
+_ASKED = {
+    "cancel": re.compile(r"\b(cancel\w*|drop|call off|don'?t need)\b", re.I),
+    "reschedule": re.compile(r"\b(resched\w*|move|change|switch|push|postpone|different (time|day)|another (time|day))\b", re.I),
+}
+
+
+def _appointment_problem(session: Session, turn: Turn, appointment_id, kind: str) -> Optional[str]:
+    """Python rule: only cancel/reschedule what the PATIENT asked to, and only the appointment they meant.
+
+    - The patient must have asked for a change in this message or the previous one
+      (so "yes" after "Shall I cancel your Monday visit?" counts).
+    - With several upcoming appointments, the messages must pick one out (its
+      date/time, or an ordinal); otherwise the agent has to ask which.
+    """
+    msg, prev = turn.user_message, session.last_user_message
+    if not _ASKED[kind].search(f"{msg} {prev}"):
+        # Found in eval (qwen3:1.7b): "Please cancel my appointment" became a reschedule request.
+        other = "reschedule" if kind == "cancel" else "cancel"
+        hint = f" They asked to {other}; use {other}_appointment." if _ASKED[other].search(f"{msg} {prev}") else ""
+        return (f"check 'patient_asked': the patient has not asked to {kind} an appointment.{hint} "
+                "Do not change appointments unless they ask.")
+    mine = tools.list_appointments(session.conn, session.patient_alias)
+    if not any(str(a["id"]) == str(appointment_id) for a in mine) or len(mine) == 1:
+        return None  # not theirs -> the tool reports it; only one -> nothing to choose between
+    options = [{"slot_id": str(a["id"]), "date": a["date"], "time": a["time"], "provider": a["provider"]} for a in mine]
+    picked = picked_option(msg, options, session.today) or (picked_option(prev, options, session.today) if prev else None)
+    if picked is not None and picked["slot_id"] == str(appointment_id):
+        return None
+    listing = "; ".join(f"#{o['slot_id']} {o['date']} {o['time']} with {o['provider']}" for o in options)
+    return (f"check 'patient_chose_appointment': the patient has {len(mine)} appointments ({listing}) and it is not "
+            f"clear that they meant #{appointment_id}. Ask which appointment to {kind}.")
 
 
 ORDINALS = {"first": 0, "1st": 0, "earliest": 0, "second": 1, "2nd": 1, "third": 2, "3rd": 2,
@@ -222,6 +297,8 @@ def picked_option(message: str, offered: list[dict], today: date) -> Optional[di
     if len(candidates) > 1:
         dated = [o for o in candidates if mentions_date(t, date.fromisoformat(o["date"]), today)]
         candidates = dated or candidates
+    if not candidates:  # "cancel my Wednesday one": a date alone can pick it out
+        candidates = [o for o in offered if mentions_date(t, date.fromisoformat(o["date"]), today)]
     return candidates[0] if len(candidates) == 1 else None
 
 
@@ -269,6 +346,13 @@ def _options_text(slots: list[dict]) -> str:
 
 def _fallback_reply(session: Session, turn: Turn, base: str) -> str:
     """When the model fails, Python still gives the patient something true and useful."""
+    if (turn.decision or {}).get("intent") == "cancel_or_reschedule":
+        mine = tools.list_appointments(session.conn, session.patient_alias)
+        if not mine:
+            return f"{base} You don't have any upcoming appointments."
+        listing = "; ".join(f"{date.fromisoformat(a['date']):%A %B} {date.fromisoformat(a['date']).day} at {a['time']} "
+                            f"with {a['provider']}" for a in mine)
+        return f"{base} Your upcoming appointments: {listing}. Which one do you mean, and what would you like to do?"
     options = _grounded_options(session, turn)
     if options:
         return f"{base} The open times are: {_options_text(options)}. Which would you like?"
@@ -280,50 +364,94 @@ def _stop(session: Session, turn: Turn, reason: str, reply: str) -> Turn:
     turn.reply = reply
     # Remember exactly which options the patient was shown, so their answer can be checked next turn.
     session.last_offered = _offered_in_reply(session, turn, reply) if reason != "awaiting_approval" else []
+    session.active_agent = turn.agent
     _log(turn, "STOP", stop_reason=reason, reply=reply)
     return turn
 
 
+def _reject(session: Session, turn: Turn, problem: str, extra: Optional[dict] = None) -> Optional[Turn]:
+    """Log a failed harness check, send it to the model, stop if there were too many."""
+    turn.invalid += 1
+    obs = {"ok": False, "rejected": True, "errors": [problem], **(extra or {})}
+    _log(turn, "VALIDATION", passed=False, errors=[problem])
+    _log(turn, "TOOL_OBSERVATION", observation=obs)
+    _observe(session, turn, obs)
+    if turn.invalid >= config.MAX_INVALID:
+        return _stop(session, turn, "too_many_invalid", _fallback_reply(session, turn, "Sorry, I ran into a problem. Nothing was changed."))
+    return None
+
+
+def _prepare_gated(session: Session, turn: Turn, action: str, arg: dict) -> tuple[Optional[str], Optional[dict]]:
+    """Run the Python checks for a book/cancel/reschedule proposal. Returns (problem, prepared)."""
+    kind = GATED[action]
+    if kind == "book":
+        problem = _substitution_problem(session, turn, arg["slot_id"])
+        return problem, (None if problem else tools.prepare_booking(session.conn, arg["slot_id"], session.patient_alias, arg["reason"]))
+    problem = _appointment_problem(session, turn, arg["appointment_id"], kind)
+    if problem:
+        return problem, None
+    if kind == "cancel":
+        return None, tools.prepare_cancel(session.conn, arg["appointment_id"], session.patient_alias, arg["reason"])
+    # Reschedule: Python turns the requested date/time into a real slot (small models invent slot ids).
+    found = tools.check_availability(session.conn, arg["new_date"], arg["new_time"], arg.get("provider"))
+    _remember_slots(turn, "check_availability", found)
+    if found.get("status") != "available":
+        return None, {"ok": False, **{k: v for k, v in found.items() if k != "ok"},
+                      "next_step": "That new time is not available. Offer the alternatives and ask the patient to choose."}
+    new_slot = found["slots"][0]["slot_id"]
+    problem = _substitution_problem(session, turn, new_slot)
+    if problem:
+        return problem, None
+    return None, tools.prepare_reschedule(session.conn, arg["appointment_id"], new_slot, session.patient_alias, arg["reason"])
+
+
+def _waiting_text(request: dict) -> str:
+    when = f"{request['date']} at {request['time']} with {request['provider']}"
+    if request.get("action") == "cancel":
+        return f"I've sent your request to cancel {when} to our staff for approval. I'll update you here."
+    if request.get("action") == "reschedule":
+        f = request["from"]
+        return (f"I've sent your request to move {f['date']} at {f['time']} to {when} to our staff for approval. "
+                "I'll update you here.")
+    return f"I've sent {when} to our staff for approval. I'll update you here once they decide."
+
+
 def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -> Turn:
-    system = {"role": "system", "content": build_system_prompt(session.today, session.patient_alias, session.prompt_variant)}
+    def system():
+        return {"role": "system", "content": build_system_prompt(session.today, session.patient_alias,
+                                                                 session.prompt_variant, agent=turn.agent)}
 
     while sum(1 for s in turn.steps if s["kind"] == "MODEL_PROPOSED") < config.MAX_STEPS:
         # 1. Model proposes
         try:
-            raw = llm.chat([system, *session.history])
+            raw = llm.chat([system(), *session.history])
         except LLMError as e:
             _log(turn, "LLM_ERROR", error=str(e))
-            return _stop(session, turn, "llm_error", f"Sorry, the assistant's language model is unavailable right now ({e}). Nothing was booked.")
+            return _stop(session, turn, "llm_error", f"Sorry, the assistant's language model is unavailable right now ({e}). Nothing was changed.")
         session.history.append({"role": "assistant", "content": raw})
 
-        # 2. Parse + validate
+        # 2. Parse + validate (including: may THIS agent use this tool?)
         proposal, parse_error = parse_proposal(raw)
-        errors = [f"parser: {parse_error}"] if parse_error else validate(proposal, session.today, session.conn)
+        errors = [f"parser: {parse_error}"] if parse_error else validate(proposal, session.today, session.conn, agent=turn.agent)
         _log(turn, "MODEL_PROPOSED", raw=raw[:2000], proposal=proposal)
-        _log(turn, "VALIDATION", passed=not errors, errors=errors)
         if errors:
-            turn.invalid += 1
-            obs = {"ok": False, "rejected": True, "errors": errors, "hint": "Fix the proposal and reply with one valid JSON action."}
-            _log(turn, "TOOL_OBSERVATION", observation=obs)
-            _observe(session, turn, obs)
-            if turn.invalid >= config.MAX_INVALID:
-                return _stop(session, turn, "too_many_invalid", _fallback_reply(session, turn, "Sorry, I ran into a problem processing that. Nothing was booked."))
+            stopped = _reject(session, turn, errors[0] if len(errors) == 1 else "; ".join(errors),
+                              {"hint": "Fix the proposal and reply with one valid JSON action."})
+            if stopped:
+                return stopped
             continue
+        _log(turn, "VALIDATION", passed=True, errors=[])
 
         action, arg = proposal["action"], proposal.get("argument", {}) or {}
 
         # Loop detection (found in eval: qwen3:4b repeated the same list_openings 7 times).
-        call_key = json.dumps([action, arg], sort_keys=True)
+        call_key = json.dumps([turn.agent, action, arg], sort_keys=True)
         if action != "reply" and call_key in turn.calls_made:
-            turn.invalid += 1
-            problem = (f"check 'no_repeat': you already called {action} with these exact arguments in this turn and "
-                       "the result has not changed. Use the earlier OBSERVATION and decide the next step, usually a reply to the patient.")
-            _log(turn, "VALIDATION", passed=False, errors=[problem])
-            obs = {"ok": False, "rejected": True, "errors": [problem]}
-            _log(turn, "TOOL_OBSERVATION", observation=obs)
-            _observe(session, turn, obs)
-            if turn.invalid >= config.MAX_INVALID:
-                return _stop(session, turn, "too_many_invalid", _fallback_reply(session, turn, "Sorry, I got stuck on that request. Nothing was booked."))
+            stopped = _reject(session, turn, f"check 'no_repeat': you already called {action} with these exact arguments in this "
+                              "turn and the result has not changed. Use the earlier OBSERVATION and decide the next step, "
+                              "usually a reply to the patient.")
+            if stopped:
+                return stopped
             continue
         turn.calls_made.add(call_key)
 
@@ -332,76 +460,109 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
         if action == "find_next_openings":
             named = named_dates(turn.user_message, session.today)
             if named:
-                turn.invalid += 1
-                problem = (f"check 'use_named_date': the patient named {named[0].isoformat()} ({named[0]:%A}). "
-                           "Use check_availability (if they gave a time) or list_openings for that date instead.")
-                _log(turn, "VALIDATION", passed=False, errors=[problem])
-                obs = {"ok": False, "rejected": True, "errors": [problem]}
-                _log(turn, "TOOL_OBSERVATION", observation=obs)
-                _observe(session, turn, obs)
+                stopped = _reject(session, turn, f"check 'use_named_date': the patient named {named[0].isoformat()} "
+                                  f"({named[0]:%A}). Use check_availability (if they gave a time) or list_openings for that date instead.")
+                if stopped:
+                    return stopped
                 continue
 
-        # 3a. Final reply, with an output guardrail checked against the database
+        # 3a. Hand-off between agents (at most once per turn, so they cannot ping-pong)
+        if action == "transfer":
+            target = arg["to"]
+            intent = (turn.decision or {}).get("intent", "other")
+            if target == turn.agent or turn.transferred:
+                stopped = _reject(session, turn, "check 'transfer': no further transfers this turn; reply to the patient.")
+                if stopped:
+                    return stopped
+                continue
+            if target == "faq" and intent in ("book", "cancel_or_reschedule"):
+                # Found in eval (qwen3:1.7b): a cancel request was handed to the FAQ agent, which cannot cancel.
+                stopped = _reject(session, turn, f"check 'transfer': the router classified this as '{intent}', which the "
+                                  "scheduling agent handles. Stay and finish it.")
+                if stopped:
+                    return stopped
+                continue
+            _log(turn, "HANDOFF", from_agent=turn.agent, to_agent=target, by="agent")
+            turn.agent, turn.transferred = target, True
+            _observe(session, turn, {"ok": True, "transferred_to": target,
+                                     "note": f"You are now the {target} agent. Continue helping the patient."})
+            continue
+
+        # 3b. Final reply, with output guardrails checked against the database
         if action == "reply":
             message = arg["message"]
-            if claims_booking(message) and not turn.booked:
+            false_booking = claims_booking(message) and not turn.booked
+            false_change = claims_change(message) and not turn.changed
+            if false_booking or false_change:
+                what = "an appointment is booked" if false_booking else "an appointment was cancelled or moved"
                 if not turn.guard_retried:
                     turn.guard_retried = True
                     obs = {"ok": False, "rejected": True, "errors": [
-                        "check 'grounded_reply': your reply says an appointment is booked, but no booking was approved, "
-                        "saved and verified in this turn. Do not claim it. Rewrite the reply."]}
+                        f"check 'grounded_reply': your reply says {what}, but nothing like that was approved, "
+                        "carried out and verified in this turn. Do not claim it. Rewrite the reply."]}
                     _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
                     _observe(session, turn, obs)
                     continue
                 _log(turn, "OUTPUT_GUARD", passed=False, action="replaced")
-                return _stop(session, turn, "reply_corrected",
-                             _fallback_reply(session, turn, "I haven't booked anything yet."))
+                return _stop(session, turn, "reply_corrected", _fallback_reply(session, turn, "I haven't changed anything yet."))
             if turn.booked and not mentions_time(message, turn.booked["time"]) and not turn.guard_retried:
                 # Found in eval: model booked Monday 13:30 and told the patient "Tuesday". Make it restate the facts.
                 turn.guard_retried = True
                 b = turn.booked
                 obs = {"ok": False, "rejected": True, "errors": [
-                    f"check 'grounded_reply': the verified booking is {b['date']} at {b['time']} with {b['provider']}. "
+                    f"check 'grounded_reply': the verified appointment is {b['date']} at {b['time']} with {b['provider']}. "
                     "Your reply must state exactly this date and time."]}
                 _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
                 _observe(session, turn, obs)
                 continue
             _log(turn, "OUTPUT_GUARD", passed=True)
-            return _stop(session, turn, "booked_verified" if turn.booked else "replied", message)
+            return _stop(session, turn, VERIFIED_STOP.get(turn.done_action, "replied"), message)
 
-        # 3b. Booking goes through the approval gate, never straight to the database
-        if action == "book_appointment":
-            problem = _substitution_problem(session, turn, arg["slot_id"])
-            prep = (tools.prepare_booking(session.conn, arg["slot_id"], session.patient_alias, arg["reason"])
-                    if not problem else None)
+        # 3c. Book / cancel / reschedule: Python checks, then the HUMAN approval gate
+        if action in ("cancel_appointment", "reschedule_appointment") and not turn.looked_up:
+            # Found in eval (qwen3:1.7b): it guessed appointment ids (123 instead of 120). Look them up for it.
+            turn.looked_up = True
+            mine = tools.list_my_appointments(session.conn, session.patient_alias)["appointments"]
+            extra = {"your_appointments": mine}
+            if action == "cancel_appointment" and len(mine) == 1 and _ASKED["cancel"].search(turn.user_message):
+                extra["suggested_next_action"] = {"action": "cancel_appointment", "argument": {
+                    "appointment_id": mine[0]["appointment_id"], "reason": arg.get("reason", "patient request")}}
+            stopped = _reject(session, turn, "check 'look_up_first': you used an appointment_id without looking it up. "
+                              "Here are the patient's real appointments; use one of these ids.", extra)
+            if stopped:
+                return stopped
+            continue
+        if action in GATED:
+            problem, prep = _prepare_gated(session, turn, action, arg)
             if problem:
-                turn.invalid += 1
-                obs = {"ok": False, "rejected": True, "errors": [problem]}
-                options = _grounded_options(session, turn)
+                options = _grounded_options(session, turn) if action != "cancel_appointment" else []
+                extra = {}
                 if options:  # give the model a concrete, grounded way forward
                     lead = "That time isn't available. I can offer" if turn.unavailable_seen else "Here are open times:"
-                    obs["suggested_next_action"] = {"action": "reply", "argument": {"message":
+                    extra["suggested_next_action"] = {"action": "reply", "argument": {"message":
                         f"{lead} {_options_text(options)}. Which would you like?"}}
-                _log(turn, "VALIDATION", passed=False, errors=[problem])
-                if turn.invalid >= config.MAX_INVALID:
-                    _log(turn, "TOOL_OBSERVATION", action=action, observation=obs)
-                    return _stop(session, turn, "too_many_invalid",
-                                 _fallback_reply(session, turn, "Your requested time isn't available and nothing was booked."))
-            elif not prep["ok"]:
+                stopped = _reject(session, turn, problem, extra)
+                if stopped:
+                    return stopped
+                continue
+            if not prep["ok"]:
                 obs = prep
             else:
                 request = prep["approval_request"] | {"patient_request": turn.user_message}
-                _log(turn, "APPROVAL_REQUESTED", request=request)
+                request_id = tools.create_request(session.conn, session.id, request)   # the staff queue
+                _log(turn, "APPROVAL_REQUESTED", request=request, request_id=request_id)
                 decision = approver(request)
-                if decision is None:  # a human will decide later (UI)
-                    session.pending = {"request": request, "turn": turn}
-                    return _stop(session, turn, "awaiting_approval",
-                                 f"Waiting for staff approval: {request['date']} at {request['time']} with {request['provider']}.")
-                obs = _finish_booking(session, turn, request, bool(decision), channel)
+                if decision is None:  # staff will decide later (UI dashboard)
+                    session.pending = {"request": request, "turn": turn, "request_id": request_id}
+                    return _stop(session, turn, "awaiting_approval", _waiting_text(request))
+                obs = _finish_request(session, turn, request, bool(decision), channel, request_id)
         else:
-            # 3c. Read-only tool
+            # 3d. Read-only tool. Python injects who the patient is and what "today" is.
             if action == "find_next_openings":
-                arg = arg | {"from_date": session.today.isoformat()}  # injected by Python, not chosen by the model
+                arg = arg | {"from_date": session.today.isoformat()}
+            if action == "list_my_appointments":
+                arg = {"patient_alias": session.patient_alias}
+                turn.looked_up = True
             try:
                 obs = tools.READ_TOOLS[action](session.conn, **arg)
             except Exception as e:  # a tool failure is an observation, not a crash
@@ -413,7 +574,17 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
         _observe(session, turn, obs)
 
     return _stop(session, turn, "max_steps", _fallback_reply(
-        session, turn, "Sorry, I couldn't finish that request." + ("" if turn.booked else " Nothing was booked.")))
+        session, turn, "Sorry, I couldn't finish that request." + ("" if turn.done_action else " Nothing was changed.")))
+
+
+def choose_agent(session: Session, decision) -> tuple[str, str]:
+    """Front-desk router (decision model, not an LLM): which agent handles this message?"""
+    if decision.intent in ("book", "cancel_or_reschedule"):
+        return "scheduling", f"intent={decision.intent}"
+    if decision.intent == "ask_info":
+        return "faq", "intent=ask_info"
+    # Short follow-ups like "yes" or "the second one" stay with whoever is mid-conversation.
+    return session.active_agent, f"intent=other, staying with {session.active_agent}"
 
 
 def _save_record(session: Session, turn: Turn, llm, decider_name: str) -> None:
@@ -423,6 +594,7 @@ def _save_record(session: Session, turn: Turn, llm, decider_name: str) -> None:
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "llm": getattr(llm, "name", "?"),
         "decider": decider_name,
+        "agent": turn.agent,
         "prompt_variant": session.prompt_variant,
         "today": session.today.isoformat(),
         "patient_alias": session.patient_alias,
@@ -443,11 +615,11 @@ def _save_record(session: Session, turn: Turn, llm, decider_name: str) -> None:
 def run_turn(session: Session, user_message: str, llm, decider, approver: Approver,
              channel: str = "cli", policy: str = "strict", save: bool = True,
              on_step: Optional[Callable[[dict], None]] = None) -> Turn:
-    turn = Turn(user_message=user_message, on_step=on_step)
+    turn = Turn(user_message=user_message, on_step=on_step, agent=session.active_agent)
     if session.pending:
-        return _stop(session, turn, "awaiting_approval", "A booking is still waiting for staff approval. Please approve or deny it first.")
+        return _stop(session, turn, "awaiting_approval", "Your previous request is still waiting for staff approval.")
 
-    # 0. Decision model: fixed-choice routing before the LLM is involved
+    # 0. Router: decision model first (fixed choices), then pick the agent
     decision = decider.decide(user_message)
     routing = route(decision, policy)
     turn.decision = decision.to_dict() | {"route": routing}
@@ -458,26 +630,32 @@ def run_turn(session: Session, user_message: str, llm, decider, approver: Approv
                             {"role": "assistant", "content": json.dumps({"action": "reply", "argument": {"message": FRONT_DESK_REPLIES[routing["reason"]]}})}]
         _stop(session, turn, "front_desk", FRONT_DESK_REPLIES[routing["reason"]])
     else:
+        agent, why = choose_agent(session, decision)
+        if agent != turn.agent or not any(s["kind"] == "ROUTER" for s in turn.steps):
+            _log(turn, "ROUTER", to_agent=agent, reason=why)
+        turn.agent = agent
         content = user_message
         if routing["notes"]:
             content += "\n\n[System notes: " + " ".join(routing["notes"]) + "]"
         session.history.append({"role": "user", "content": content})
         _loop(session, turn, llm, approver, channel)
 
+    session.last_user_message = user_message
     if save:
         _save_record(session, turn, llm, getattr(decider, "name", "?"))
     return turn
 
 
 def resume_turn(session: Session, approved: bool, llm, decider_name: str = "?", channel: str = "ui", save: bool = True) -> Turn:
-    """Continue a turn that stopped at 'awaiting_approval' once a human has decided."""
+    """Continue a turn that stopped at 'awaiting_approval' once a human (staff) has decided."""
     if not session.pending:
         raise ValueError("Nothing is waiting for approval.")
-    request, turn = session.pending["request"], session.pending["turn"]
+    request, turn, request_id = session.pending["request"], session.pending["turn"], session.pending.get("request_id")
     session.pending = None
     turn.steps.pop()  # drop the interim awaiting_approval STOP
-    obs = _finish_booking(session, turn, request, approved, channel)
-    _log(turn, "TOOL_OBSERVATION", action="book_appointment", observation=obs)
+    obs = _finish_request(session, turn, request, approved, channel, request_id)
+    action = {"book": "book_appointment", "cancel": "cancel_appointment", "reschedule": "reschedule_appointment"}[request.get("action", "book")]
+    _log(turn, "TOOL_OBSERVATION", action=action, observation=obs)
     _observe(session, turn, obs)
     _loop(session, turn, llm, approver=lambda r: None, channel=channel)
     if save:
