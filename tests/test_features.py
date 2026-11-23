@@ -290,3 +290,88 @@ def test_regression_cancel_not_handed_to_faq_agent(conn, open_slot):
     assert "Stay and finish it" in llm.calls[2][-1]["content"]              # transfer refused
     assert turn.agent == "scheduling" and turn.stop_reason == "reply_corrected"
     assert "Your upcoming appointments:" in turn.reply and count_appointments(conn) == 1
+
+
+# --- regressions from the logged demo run (evidence/demo_20261123_135243.md) -------------------
+
+def test_regression_known_id_and_retry_are_not_blocked(conn, open_slot):
+    """Demo: reschedule with the correct id #114 was rejected (look_up_first), then the correct retry was
+    blocked as a 'repeat' although the first attempt never ran. Both must now go through."""
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    new = tools.list_openings(conn, "2026-11-25", provider="Dr. Chen")["openings"][0]
+    turn, approver, llm = say(conn, session, [
+        act("reschedule_appointment", appointment_id=appt["id"], new_date="2026-11-25", new_time=new["time"], provider="Dr. Chen", reason="x"),
+        act("reply", message=f"Moved to Wednesday November 25 at {new['time']}."),
+    ], f"something came up, can we push that to Wednesday November 25 at {new['time']} instead?")
+    assert turn.stop_reason == "rescheduled_verified", [s.get("errors") for s in turn.steps if s["kind"] == "VALIDATION"]
+    assert len(approver.requests) == 1
+
+
+def test_regression_retry_after_rejection_is_not_a_repeat(conn, open_slot):
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    turn, approver, llm = say(conn, session, [
+        act("cancel_appointment", appointment_id=99999, reason="x"),          # rejected: not theirs
+        act("cancel_appointment", appointment_id=appt["id"], reason="x"),     # correct
+        act("cancel_appointment", appointment_id=appt["id"], reason="x"),     # (would be a real repeat)
+        act("reply", message="Your appointment is cancelled."),
+    ], "please cancel the whole thing")
+    assert turn.stop_reason == "cancelled_verified" and len(approver.requests) == 1
+
+
+def test_regression_cannot_book_for_a_friend(conn):
+    """Demo: 'book my friend Test Patient B' -> booked for the signed-in patient, reply said 'booked for Test Patient B'."""
+    session = session_for(conn)
+    slot = tools.list_openings(conn, "2026-11-23", provider="Dr. Rivera")["openings"][0]
+    turn, approver, llm = say(conn, session, [
+        act("book_appointment", slot_id=slot["slot_id"], reason="Booking for Test Patient B"),
+        act("reply", message="Appointment booked for Test Patient B at 10:00."),
+        act("reply", message="Appointment booked for Test Patient B at 10:00."),
+    ], "Can you book my friend Test Patient B in for 10am Monday too?")
+    assert approver.requests == [] and count_appointments(conn) == 0
+    assert "only_this_patient" in llm.calls[1][-1]["content"]
+    assert turn.stop_reason == "reply_corrected" and "Test Patient B" not in turn.reply
+
+
+def test_my_son_counts_as_someone_else(conn, open_slot):
+    session = session_for(conn)
+    turn, approver, llm = say(conn, session, [
+        act("book_appointment", slot_id=open_slot["slot_id"], reason="x"),
+        act("reply", message="I can only book for you; your son will need to contact the office."),
+    ], f"Book my son in on {BUSY_TUESDAY} at {open_slot['time']}")
+    assert approver.requests == [] and "only_this_patient" in llm.calls[1][-1]["content"]
+
+
+def test_regression_only_one_booking_per_message(conn):
+    """Demo: 'book 9, 9:30 and 10 so I have options' queued two bookings."""
+    session = session_for(conn)
+    s1, s2 = tools.list_openings(conn, "2026-11-23", provider="Dr. Chen")["openings"][:2]
+    turn, approver, llm = say(conn, session, [
+        act("book_appointment", slot_id=s1["slot_id"], reason="x"),
+        act("book_appointment", slot_id=s2["slot_id"], reason="x"),
+        act("reply", message=f"Booked {s1['time']}. Do you want another one?"),
+    ], f"Book me at {s1['time']} and {s2['time']} on Monday November 23 with Dr. Chen")
+    assert len(approver.requests) == 1 and count_appointments(conn) == 1
+    assert "one_request" in llm.calls[2][-1]["content"]
+
+
+def test_regression_emergency_gets_urgent_reply(conn):
+    from backend.decision import Decision, route
+    d = Decision("other", {"book": 0.03, "ask_info": 0.03, "cancel_or_reschedule": 0.04, "other": 0.9},
+                 0.05, 0.9, 3.0, "test")
+    assert route(d) == {"action": "front_desk", "reason": "emergency"}
+    session = session_for(conn)
+
+    class Emergency(RuleDecider):
+        def decide(self, text, context=None):
+            return d
+
+    turn = run_turn(session, "I knocked a tooth out and there's a lot of blood", ScriptedLLM([]), Emergency(),
+                    Approver(True), channel="test", save=False)
+    assert turn.stop_reason == "front_desk" and "emergency services" in turn.reply and "right now" in turn.reply
+
+
+def test_insurance_and_prices_have_honest_answers(conn):
+    assert "cannot confirm" in tools.get_office_info(conn, "insurance")["info"]
+    assert "quote" in tools.get_office_info(conn, "prices")["info"]

@@ -34,7 +34,7 @@ ACTIONS = {
     "get_office_info": {
         "required": {"topic": str},
         "optional": {},
-        "description": "Office facts. topic: hours | address | services | providers | cancellation_policy.",
+        "description": "Office facts. topic: hours | address | services | providers | cancellation_policy | insurance | prices.",
     },
     "book_appointment": {
         "required": {"slot_id": str, "reason": str},

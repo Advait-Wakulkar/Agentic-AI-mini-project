@@ -19,7 +19,9 @@ OFFICE_INFO = {
     "address": "Bright Smile Dental, 100 Example Street, Suite 2 (fictional office).",
     "services": "Cleanings, check-ups, fillings and emergency visits. Each appointment is 30 minutes.",
     "providers": "Dr. Rivera (general dentistry), Dr. Chen (general dentistry), Dr. Okafor (hygienist, cleanings).",
-    "cancellation_policy": "Please call the front desk at least 24 hours ahead to cancel. The assistant cannot cancel appointments.",
+    "cancellation_policy": "Please cancel at least 24 hours ahead. You can cancel or move appointments here; staff approve every change.",
+    "insurance": "The front desk checks insurance coverage for each patient; the assistant cannot confirm whether a specific plan is accepted. Please call the office with your plan details.",
+    "prices": "Prices depend on the treatment and your insurance. The front desk can give you a quote before your visit.",
 }
 
 

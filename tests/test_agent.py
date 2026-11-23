@@ -394,3 +394,19 @@ def test_corrected_reply_relists_the_offered_times_and_they_stay_pickable(conn):
                                        act("reply", message=f"Booked: {session.last_offered[1]['time']}.")],
                                 "the second one", session=session)
     assert turn2.stop_reason == "booked_verified" and approver.requests[0]["slot_id"] == offered[1]
+
+
+def test_router_receives_previous_reply(conn):
+    """Short follow-ups only make sense with the last reply; the agent must hand it to the router."""
+    seen = []
+
+    class SpyDecider(RuleDecider):
+        def decide(self, text, context=None):
+            seen.append(context)
+            return super().decide(text)
+
+    session = new_session(conn)
+    for script, msg in [([act("reply", message="Dr. Chen is free at 13:00 or 14:30. Which works?")], "Is Dr. Chen free Tuesday?"),
+                        ([act("reply", message="Which day?")], "the later one")]:
+        run_turn(session, msg, ScriptedLLM(script), SpyDecider(), RecordingApprover(True), channel="test", save=False)
+    assert seen == [None, "Dr. Chen is free at 13:00 or 14:30. Which works?"]

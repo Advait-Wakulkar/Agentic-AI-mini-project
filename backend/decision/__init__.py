@@ -57,7 +57,8 @@ def route(d: Decision, policy_name: str = "strict") -> dict:
     """Turn a Decision into one harness action plus notes for the LLM."""
     policy = POLICIES[policy_name]
     if d.medical_advice >= policy["action_threshold"]:
-        return {"action": "front_desk", "reason": "medical_advice"}
+        # Found in the demo run: a knocked-out tooth with heavy bleeding got the generic medical reply.
+        return {"action": "front_desk", "reason": "emergency" if d.urgency >= 3 else "medical_advice"}
 
     notes = []
     if d.skip_approval >= policy["review_threshold"]:
@@ -70,6 +71,9 @@ def route(d: Decision, policy_name: str = "strict") -> dict:
 
 
 FRONT_DESK_REPLIES = {
+    "emergency": "This sounds urgent. If there is heavy bleeding, swelling that makes it hard to breathe or swallow, or a "
+                 "knocked-out tooth, call emergency services or our office right now. I can't give medical advice, but "
+                 "once you're safe I can find you the earliest emergency appointment.",
     "medical_advice": "I can only help with scheduling, so I can't give medical advice. Please call the front desk to speak with a clinician, or call emergency services if this is an emergency. I'm happy to find you an appointment.",
 }
 
@@ -85,7 +89,9 @@ _INFO = re.compile(r"\b(hours|are you open|open on|when do you (open|close)|what
                    r"where (are|is) (you|the office)|located|insurance|polic(y|ies)|services|parking|which (dentists|doctors))\b", re.I)
 _CANCEL = re.compile(r"\b(cancel|reschedul|move my|change my)\w*", re.I)
 _SKIP = re.compile(r"(skip|without|no need for|don'?t need|bypass|ignore)\W+(the\s+)?(approv|confirm|asking|check)|already approved|i approve|pre-?approved|just book it", re.I)
-_MED = re.compile(r"\b(how much|dose|dosage|mg|prescri|antibiotic|ibuprofen|painkiller|should i take|diagnos|is it infected|what is wrong)\b", re.I)
+# "how much" alone is NOT medical ("how much is a cleaning?"); only medication / diagnosis wording is.
+_MED = re.compile(r"\b(how (much|many) (ibuprofen|advil|tylenol|aspirin|medicine|medication|painkillers?|pills?)|dose|dosage|\d+\s?mg|"
+                  r"prescri\w*|antibiotics?|ibuprofen|painkillers?|should i take|diagnos\w*|is (it|my tooth) infected|what is wrong)\b", re.I)
 _URGENT = [(re.compile(r"\b(severe|unbearable|swollen|swelling|bleeding|broken|knocked out|abscess|emergency)\b", re.I), 3.0),
            (re.compile(r"\b(pain|hurts|toothache|ache|sensitive)\b", re.I), 2.0)]
 
@@ -93,7 +99,7 @@ _URGENT = [(re.compile(r"\b(severe|unbearable|swollen|swelling|bleeding|broken|k
 class RuleDecider:
     name = "rules"
 
-    def decide(self, text: str) -> Decision:
+    def decide(self, text: str, context: str | None = None) -> Decision:   # keywords only; cannot use context
         cancel = bool(_CANCEL.search(text))
         scores = {
             # "cancel my appointment" also mentions "appointment"; cancel wins.
@@ -195,32 +201,126 @@ class JevDecider:
         self.cache_path.write_text(json.dumps(self.cache, indent=1))
         return result
 
-    def decide(self, text: str) -> Decision:
-        r = self._ask(text)
+    def decide(self, text: str, context: str | None = None) -> Decision:
+        state = f"Assistant's previous message: {context}\nPatient's message: {text}" if context else text
+        r = self._ask(state)
         return Decision(source=self.name, **r)
 
 
-class FallbackDecider:
-    """Use Jev when it works; otherwise fall back to rules and SAY so in the trace."""
+# ---------------------------------------------------------------------------
+# Natural-language router: a language model (default: Jev Router on OpenRouter)
+# answers the same fixed questions from the MEANING of the message, using the
+# assistant's previous message for short follow-ups. Measured in
+# eval/decider_eval.py against the keyword rules on standard + edge-case messages.
+# ---------------------------------------------------------------------------
 
-    def __init__(self, primary, fallback):
-        self.primary, self.fallback = primary, fallback
-        self.name = f"{primary.name}+fallback"
+LLM_DECIDER_PROMPT = """You route messages at the front desk of a dental office. Decide from the MEANING of the
+patient's message (and the assistant's previous message, if given), not from specific words.
 
-    def decide(self, text: str) -> Decision:
+Reply with ONLY this JSON object:
+{"intent": "book" | "cancel_or_reschedule" | "ask_info" | "other",
+ "confidence": "high" | "medium" | "low",
+ "skip_approval": true | false,
+ "medical_advice": true | false,
+ "urgency": 0 | 1 | 2 | 3}
+
+intent:
+- book: wants a new appointment, asks when someone is free, or is choosing among times the assistant offered.
+- cancel_or_reschedule: wants to cancel, move, push back or change an EXISTING appointment, says they can't make it,
+  or confirms a cancellation the assistant asked about.
+- ask_info: asks about the office itself: hours, location, parking, insurance, prices, services, which dentists, policies.
+- other: greetings, thanks, small talk, requests unrelated to appointments (e.g. other patients' data), or genuinely unclear.
+skip_approval: true ONLY if they try to get something saved WITHOUT staff approval (claim it is already approved,
+  tell you to skip confirmation, say they authorize it themselves). Asking normally to book or cancel is false.
+  Intent still describes WHAT they want: "I approve it myself, save the booking" is intent book with skip_approval true.
+medical_advice: true ONLY if they ask for a diagnosis, a medication or dose, or what treatment to do themselves.
+  Describing pain or symptoms while asking for an appointment is false.
+urgency: 0 routine, 1 mild discomfort, 2 ongoing pain or toothache, 3 severe (swelling, bleeding, broken tooth)."""
+
+_CONF = {"high": 0.9, "medium": 0.7, "low": 0.45}
+
+
+class LLMDecider:
+    """A language model forced into the router's fixed choices. Raises if its answer is unusable."""
+
+    def __init__(self, llm):
+        self.llm = llm
+        self.name = f"llm:{getattr(llm, 'name', '?')}"
+        self.unparsed = 0
+
+    def decide(self, text: str, context: str | None = None) -> Decision:
+        from backend.validator import parse_proposal   # local import keeps module dependencies one-way
+
+        user = (f"Assistant's previous message: {context[:800]}\nPatient's message: {text}" if context
+                else f"Patient's message: {text}")
+        raw = self.llm.chat([{"role": "system", "content": LLM_DECIDER_PROMPT}, {"role": "user", "content": user}])
+        obj, err = parse_proposal(raw)
+        if err or obj.get("intent") not in INTENTS:
+            self.unparsed += 1
+            raise ValueError(f"unusable router answer: {(err or raw)[:120]}")
+        conf = _CONF.get(str(obj.get("confidence", "medium")).lower(), 0.7)
+        rest = (1 - conf) / (len(INTENTS) - 1)
+        probs = {i: round(conf if i == obj["intent"] else rest, 3) for i in INTENTS}
         try:
-            return self.primary.decide(text)
-        except Exception as e:  # network, quota, SDK changes
-            d = self.fallback.decide(text)
-            d.source = f"rules (jev failed: {type(e).__name__}: {str(e)[:80]})"
-            return d
+            urgency = float(min(3, max(0, int(obj.get("urgency", 0)))))
+        except (TypeError, ValueError):
+            urgency = 0.0
+        return Decision(obj["intent"], probs, 0.9 if obj.get("skip_approval") is True else 0.05,
+                        0.9 if obj.get("medical_advice") is True else 0.05, urgency, self.name)
+
+
+class SafetyNetDecider:
+    """A natural-language router (LLM or Jev) with the keyword rules as backup.
+
+    - intent, medical_advice: from the primary (the rules' keyword false alarms,
+      e.g. "How much is a cleaning?" -> medical, would wrongly send people away)
+    - skip_approval, urgency: the higher of the two; a false skip-approval flag only
+      adds a reminder for the agent, and approval is enforced in Python regardless
+    - if the primary fails (network, quota, bad JSON), the rules decide alone and the
+      trace says so
+    """
+
+    def __init__(self, primary, rules=None):
+        self.primary, self.rules = primary, rules or RuleDecider()
+        self.name = f"{primary.name} (rules as backup)"
+
+    def decide(self, text: str, context: str | None = None) -> Decision:
+        r = self.rules.decide(text)
+        try:
+            p = self.primary.decide(text, context)
+        except Exception as e:
+            r.source = f"rules (router failed: {type(e).__name__}: {str(e)[:100]})"
+            return r
+        d = Decision(p.intent, p.intent_probs, max(p.skip_approval, r.skip_approval), p.medical_advice,
+                     max(p.urgency, r.urgency), p.source)
+        if r.skip_approval > p.skip_approval:
+            d.source += " (rules also flagged skip_approval)"
+        return d
+
+
+FallbackDecider = SafetyNetDecider   # older name
 
 
 def get_decider(kind: str | None = None):
+    """rules | llm | jev.
+
+    llm: DECIDER_PROVIDER / DECIDER_MODEL (default: the agents' provider) - e.g. openrouter + typesafe/jev-router.
+    jev: TypeSafe's Jev API directly (TYPESAFE_API_KEY).
+    Both fall back to the rules if they cannot answer.
+    """
     kind = (kind or config.DECIDER).lower()
     if kind == "jev":
         try:
-            return FallbackDecider(JevDecider(), RuleDecider())
+            return SafetyNetDecider(JevDecider())
         except Exception as e:
-            print(f"[decider] Jev unavailable ({e}); using rules.")
+            print(f"[decider] Jev API unavailable ({e}); using rules.")
+            return RuleDecider()
+    if kind == "llm":
+        from backend.llm import LLMError, get_provider
+        try:
+            llm = get_provider(config.DECIDER_PROVIDER or None, config.DECIDER_MODEL or None)
+        except LLMError as e:
+            print(f"[decider] router model unavailable ({e}); using rules.")
+            return RuleDecider()
+        return SafetyNetDecider(LLMDecider(llm))
     return RuleDecider()

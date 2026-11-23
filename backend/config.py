@@ -32,7 +32,10 @@ LLM_MODEL = os.environ.get("LLM_MODEL", "")  # empty = provider default
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 
 # Which decision model answers fixed-choice questions: rules (default) or jev.
-DECIDER = os.environ.get("DECIDER", "rules").lower()
+DECIDER = os.environ.get("DECIDER", "llm").lower()               # llm | rules | jev
+# Model for the natural-language router (DECIDER=llm). Empty = same provider as the agents.
+DECIDER_PROVIDER = os.environ.get("DECIDER_PROVIDER", "").lower()  # e.g. openrouter
+DECIDER_MODEL = os.environ.get("DECIDER_MODEL", "")               # e.g. typesafe/jev-router
 
 # Harness limits.
 MAX_STEPS = int(os.environ.get("MAX_STEPS", "8"))

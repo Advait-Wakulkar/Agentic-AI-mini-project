@@ -64,7 +64,11 @@ ROLES = {
 
 FAQ_RULES = """
 Rules:
-- Answer only from get_office_info OBSERVATIONS; if there is no information, say so.
+- Answer only from get_office_info OBSERVATIONS. Pick the topic that matches the question (insurance questions ->
+  insurance, cost questions -> prices). If no topic fits, say you don't have that information and suggest calling the office.
+- Never share personal information about staff or other patients (home addresses, phone numbers, personal details);
+  say you can't share that. The office address is not anyone's home address.
+- Reply in the same language the patient wrote in.
 - If the patient wants to book, cancel, reschedule or check times, use transfer with "to": "scheduling".
 - Never give medical advice.
 """
@@ -80,7 +84,12 @@ Rules:
   several appointments and it is unclear which one, ask. "Cancel" means cancel_appointment; "move/change" means
   reschedule_appointment with the new date and time the patient asked for.
 - Never say something is booked, cancelled or moved unless an OBSERVATION shows "verified": true.
-- For questions about the office itself (hours, address, policies), use transfer with "to": "faq".
+- For questions about the office itself (hours, address, policies, insurance, prices), use transfer with "to": "faq".
+- You act only for this one patient. If they ask you to book or change something for another person, explain that the
+  other person needs to contact the office themselves.
+- One booking, cancellation or reschedule per message.
+- Never share personal information about staff or other patients.
+- Reply in the same language the patient wrote in.
 - Never give medical advice.
 """
 

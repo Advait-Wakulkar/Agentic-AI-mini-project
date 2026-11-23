@@ -118,6 +118,7 @@ book / cancel / reschedule ─▶ staff queue (DB) ─▶ STAFF approve/deny ─
 | Cancel / reschedule safety (found by eval) | The action must match what the patient asked (cancel ≠ move); with several appointments the patient must say which; guessed ids are replaced by the real list (`look_up_first`); reschedule takes a date + time and Python finds the slot; reschedule is book-new + cancel-old in one transaction |
 | Roles | Patients chat, staff approve; enforced by the API (and by Supabase Auth + RLS when sign-in is on) |
 | Decision model (not every decision needs an LLM) | [backend/decision/](backend/decision/__init__.py): fixed choices for intent, skip-approval attempt, medical-advice request, urgency |
+| Natural-language router | `DECIDER=llm` with **Jev Router on OpenRouter** (`DECIDER_PROVIDER=openrouter`, `DECIDER_MODEL=typesafe/jev-router`) answers those fixed questions from the meaning of the message plus the previous reply; keyword rules are the backup if it fails, and also raise skip-approval flags |
 | Jev (TypeSafe) | `DECIDER=jev`: one `system_one` call with `Choice`, `Noul` and `Score` questions; falls back to rules if unavailable |
 | Confidence gating and policies | Confidence = weakest judgement; `strict` / `permissive` thresholds in `route()` |
 | Harness evaluation | [eval/run_eval.py](eval/run_eval.py) (scenarios × N runs, graded from the DB) and [eval/decider_eval.py](eval/decider_eval.py) (accuracy + self-consistency) |
@@ -164,7 +165,7 @@ The seeded schedule always has Dr. Rivera's first Tuesday morning fully booked.
 ## Testing and evaluation
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 152 deterministic tests (scripted fake model, private schema, ~2.5 min on Supabase)
+.venv/bin/python -m pytest -q                                   # 163 deterministic tests (scripted fake model, private schema, ~3 min on Supabase)
 .venv/bin/python -m eval.run_eval --runs 5                      # real model, 11 scenarios × 5 runs
 .venv/bin/python -m eval.run_eval --runs 1 --variants baseline checklist example combined   # prompt experiment
 .venv/bin/python -m eval.decider_eval --repeats 5 [--jev]       # rules vs LLM (vs Jev)
@@ -198,6 +199,19 @@ Each failure found by the eval became a Python check and a regression test.
 | `20261122_*` (cancel re-run) | cancel 0/3, 0 false changes | After the ids were supplied it **transferred to the FAQ agent**, which replied "canceled" (caught by the output guard) | Hand-offs must agree with the router's intent; suggested real cancel action; cancel-aware fallback reply |
 | `20261123_002411` (11×3, Supabase) | **33/33, 0 false bookings** | — | — |
 
+### Router: keyword rules vs natural language (decider eval, 47 fictional messages)
+
+| Router | Standard phrasings (24): all three right | Natural-language edge cases (23): all three right | Avg time |
+|---|---|---|---|
+| Keyword rules | 83% | **13%** | instant |
+| Jev Router via OpenRouter (app's router, rules as backup) | **100%** | **100%** | ~2.2 s |
+
+Edge cases: no keywords ("I won't make it Monday, take me off the list"), negation ("I don't want to cancel, I want to
+add a visit"), look-alike words ("How much is a cleaning?" is not medical; "Is two Advil okay?" is), approval-skip
+attempts in plain words, pain while booking, and follow-ups that need the previous reply ("the later one").
+With the new router the full scenario eval stayed at **33/33, 0 false bookings** (`20261123_133828`; all 39 routing
+decisions answered by the router, none by the backup). Run: `.venv/bin/python -m eval.decider_eval`.
+
 Three runs per scenario is a small sample, and the fixes were developed against these same scenarios,
 so new wording may still expose failures.
 
@@ -227,7 +241,8 @@ evidence/         JSON run records
 ## Limitations
 
 - Fictional office only; there is no real calendar, reminders, or voice yet (planned extensions).
-- The rule router is keyword-based (83% intent accuracy on the labelled set); it is the baseline Jev is compared with.
+- The router needs OpenRouter (network + key); without it the keyword rules take over automatically (83% intent on standard phrasings, 17% on natural-language edge cases).
+- The 47 router test messages and labels were written by us; 100% there is strong evidence on a small set, not a guarantee for all wording.
 - Sign-in has been tested with Supabase Auth mocked; a real sign-in needs your project's anon key (see above).
 - Conversations live in server memory; after a restart staff can still decide queued requests, but the chat starts fresh.
 - Small local models make more formatting mistakes; the validator catches them but runs take more steps.

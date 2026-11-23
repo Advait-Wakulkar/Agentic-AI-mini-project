@@ -98,6 +98,7 @@ class Session:
     last_offered: list = field(default_factory=list)     # slots named in the assistant's LAST reply, earliest first
     active_agent: str = "scheduling"                     # who handled the last turn (follow-ups stay there)
     last_user_message: str = ""
+    last_reply: str = ""                                 # the router reads it to understand short follow-ups
     owner_id: Optional[str] = None                       # signed-in user who owns this conversation
     events: list = field(default_factory=list)           # finished turns the patient UI has not shown yet
 
@@ -365,8 +366,44 @@ def _stop(session: Session, turn: Turn, reason: str, reply: str) -> Turn:
     # Remember exactly which options the patient was shown, so their answer can be checked next turn.
     session.last_offered = _offered_in_reply(session, turn, reply) if reason != "awaiting_approval" else []
     session.active_agent = turn.agent
+    session.last_reply = reply
     _log(turn, "STOP", stop_reason=reason, reply=reply)
     return turn
+
+
+_SOMEONE_ELSE = re.compile(
+    r"\b(my|our|his|her|their)\s+(friend|friends|son|daughter|kid|kids|child|children|wife|husband|partner|boyfriend|"
+    r"girlfriend|mom|mum|mother|dad|father|brother|sister|colleague|coworker|co-worker|boss|neighbou?r|roommate|"
+    r"grand(ma|mother|pa|father)|aunt|uncle|cousin|family)\b|\bfor (him|her|them)\b", re.I)
+
+
+def _other_aliases(session: Session) -> list[str]:
+    return [r["alias"] for r in session.conn.query("SELECT alias FROM patients WHERE alias <> ?", (session.patient_alias,))]
+
+
+def _names_other_patient(session: Session, text: str) -> Optional[str]:
+    t = text.lower()
+    return next((a for a in _other_aliases(session) if a.lower() in t), None)
+
+
+def _someone_else_problem(session: Session, turn: Turn) -> Optional[str]:
+    """Python rule: an agent acts only for the signed-in patient, never on someone else's behalf."""
+    msg = turn.user_message
+    who = _names_other_patient(session, msg) or (m.group(0) if (m := _SOMEONE_ELSE.search(msg)) else None)
+    if not who:
+        return None
+    return (f"check 'only_this_patient': the request is about someone else ('{who}'). You can only book, cancel or "
+            f"reschedule for {session.patient_alias}. Tell the patient the other person needs to contact the office "
+            "(or sign in themselves). Do not claim anything was done for them.")
+
+
+def _one_request_problem(turn: Turn) -> Optional[str]:
+    """Python rule: at most one book / cancel / reschedule request per patient message."""
+    if any(s["kind"] == "APPROVAL_REQUESTED" for s in turn.steps):
+        # Found in the demo run: "book 9, 9:30 and 10 so I have options" queued two bookings.
+        return ("check 'one_request': only one booking, cancellation or reschedule per message. Tell the patient what "
+                "was done and ask whether they want anything else.")
+    return None
 
 
 def _reject(session: Session, turn: Turn, problem: str, extra: Optional[dict] = None) -> Optional[Turn]:
@@ -453,7 +490,8 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
             if stopped:
                 return stopped
             continue
-        turn.calls_made.add(call_key)
+        # (call_key is remembered below, only once the call has actually RUN. Found in the demo run:
+        #  a correct retry after a rejected attempt was wrongly blocked as a "repeat".)
 
         # Tool-choice check (found in eval: patient said "Tuesday November 24 at 13:30",
         # model used find_next_openings, which returned Monday instead).
@@ -491,6 +529,22 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
         # 3b. Final reply, with output guardrails checked against the database
         if action == "reply":
             message = arg["message"]
+            other = _names_other_patient(session, message)
+            if other:
+                # Found in the demo run: "book my friend Test Patient B" -> booked for the signed-in patient, but
+                # the reply said "booked for Test Patient B". Replies may only talk about this patient.
+                if not turn.guard_retried:
+                    turn.guard_retried = True
+                    obs = {"ok": False, "rejected": True, "errors": [
+                        f"check 'grounded_reply': your reply mentions another patient ({other}). You only act for "
+                        f"{session.patient_alias}. Rewrite the reply about {session.patient_alias} only."]}
+                    _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
+                    _observe(session, turn, obs)
+                    continue
+                _log(turn, "OUTPUT_GUARD", passed=False, action="replaced")
+                return _stop(session, turn, "reply_corrected",
+                             f"I can only help with appointments for you ({session.patient_alias}). Anyone else needs to "
+                             "contact the office themselves.")
             false_booking = claims_booking(message) and not turn.booked
             false_change = claims_change(message) and not turn.changed
             if false_booking or false_change:
@@ -519,8 +573,19 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
             return _stop(session, turn, VERIFIED_STOP.get(turn.done_action, "replied"), message)
 
         # 3c. Book / cancel / reschedule: Python checks, then the HUMAN approval gate
-        if action in ("cancel_appointment", "reschedule_appointment") and not turn.looked_up:
-            # Found in eval (qwen3:1.7b): it guessed appointment ids (123 instead of 120). Look them up for it.
+        if action in GATED:
+            problem = _one_request_problem(turn) or _someone_else_problem(session, turn)
+            if problem:
+                stopped = _reject(session, turn, problem)
+                if stopped:
+                    return stopped
+                continue
+        mine_ids = ({str(m["appointment_id"]) for m in tools.list_my_appointments(session.conn, session.patient_alias)["appointments"]}
+                    if action in ("cancel_appointment", "reschedule_appointment") and not turn.looked_up else set())
+        if action in ("cancel_appointment", "reschedule_appointment") and not turn.looked_up \
+                and str(arg["appointment_id"]) not in mine_ids:
+            # Found in eval (qwen3:1.7b): it guessed appointment ids (123 instead of 120). Hand it the real ones.
+            # A real id of this patient (e.g. seen earlier in the conversation) is accepted as is (found in the demo run).
             turn.looked_up = True
             mine = tools.list_my_appointments(session.conn, session.patient_alias)["appointments"]
             extra = {"your_appointments": mine}
@@ -570,6 +635,7 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
             _remember_slots(turn, action, obs)
 
         # 4. Observation back to the model
+        turn.calls_made.add(call_key)   # it ran: an identical repeat would get the same answer
         _log(turn, "TOOL_OBSERVATION", action=action, observation=obs)
         _observe(session, turn, obs)
 
@@ -578,7 +644,7 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
 
 
 def choose_agent(session: Session, decision) -> tuple[str, str]:
-    """Front-desk router (decision model, not an LLM): which agent handles this message?"""
+    """Front-desk router: which agent handles this message? (decided by the router model, rules as backup)"""
     if decision.intent in ("book", "cancel_or_reschedule"):
         return "scheduling", f"intent={decision.intent}"
     if decision.intent == "ask_info":
@@ -620,7 +686,7 @@ def run_turn(session: Session, user_message: str, llm, decider, approver: Approv
         return _stop(session, turn, "awaiting_approval", "Your previous request is still waiting for staff approval.")
 
     # 0. Router: decision model first (fixed choices), then pick the agent
-    decision = decider.decide(user_message)
+    decision = decider.decide(user_message, context=session.last_reply or None)
     routing = route(decision, policy)
     turn.decision = decision.to_dict() | {"route": routing}
     _log(turn, "DECIDER", decider=decision.source, decision=turn.decision)
