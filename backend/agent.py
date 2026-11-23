@@ -407,6 +407,10 @@ _TIME = re.compile(r"\b(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?|\b(\d{1,2})\s*
 _PLAN_CLAIM = re.compile(r"\b(we|the office|they|you)\s+(do\s+|does\s+)?(accept|take|cover|work with|are in[- ]network)\b|"
                          r"\b(is|are)\s+(accepted|covered|in[- ]network)\b", re.I)
 _NEGATION = re.compile(r"\b(not|n't|cannot|can't|unable|no)\b|\?", re.I)
+# Only sentences ABOUT insurance count (found in eval: "We take a 12:00 to 1:00 lunch break" was flagged).
+_INSURANCE_CONTEXT = re.compile(r"\b(insurance|insurer|plans?|ppo|hmo|coverage|covered|in[- ]network|delta|aetna|cigna|"
+                                r"metlife|guardian|humana|united ?healthcare|blue cross|medicaid|medicare)\b", re.I)
+_PHONE = re.compile(r"((?:\+\d{1,3}[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]\d{4}\b)")   # (555) 123-4567, 555-123-4567
 
 
 def _weekday_mismatch(text: str, today: date) -> Optional[str]:
@@ -440,9 +444,19 @@ def times_in(text: str) -> set[str]:
 
 def _claims_plan_accepted(text: str) -> bool:
     for sentence in re.split(r"(?<=[.!?])\s+", text):
-        if _PLAN_CLAIM.search(sentence) and not _NEGATION.search(sentence):
+        if _PLAN_CLAIM.search(sentence) and _INSURANCE_CONTEXT.search(sentence) and not _NEGATION.search(sentence):
             return True
     return False
+
+
+def _invented_phone(text: str) -> Optional[str]:
+    """A phone number the office info does not contain. Found in eval: the model made up '(555) 123-4567'."""
+    known = " ".join(tools.OFFICE_INFO.values())
+    for m in _PHONE.findall(text):
+        digits = re.sub(r"\D", "", m)
+        if len(digits) >= 7 and digits not in re.sub(r"\D", "", known):
+            return m.strip()
+    return None
 
 
 def _confirmation(request: dict) -> str:
@@ -482,6 +496,12 @@ def _reply_problem(session: Session, turn: Turn, message: str) -> tuple[Optional
             # Demo re-run: one slot booked, reply said "I've booked your 9:00 AM and 1:00 PM slots".
             return (f"only {b['time']} was booked; your reply also mentions {', '.join(sorted(extra))} as if booked.",
                     _confirmation(b))
+    phone = _invented_phone(message)
+    if phone:
+        return (f"your reply gives a phone number ({phone}) that is not in the office info; never invent contact details.",
+                _fallback_reply(session, turn, "") if turn.agent == "scheduling" and not turn.booked
+                else (_confirmation(turn.booked) if turn.booked else
+                      "Please contact the office directly; I don't have a phone number to share here."))
     if _claims_plan_accepted(message):
         # Demo re-run: "We do accept Delta Dental" although the office info says coverage is confirmed by staff.
         return ("the office info does not say which insurance plans are accepted; do not claim any plan is accepted.",

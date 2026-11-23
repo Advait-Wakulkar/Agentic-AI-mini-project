@@ -451,3 +451,20 @@ def test_named_day_to_avoid_is_not_forced(conn):
                                        act("reply", message="Here are Wednesday's times.")],
                        "Monday doesn't work for me, anything later in the week?")
     assert not any("use_named_date" in m["content"] for call in llm.calls for m in call)
+
+
+def test_regression_lunch_break_is_not_an_insurance_claim(conn):
+    """Eval after the insurance guard: 'We take a 12:00 to 1:00 lunch break' was flagged as a plan claim."""
+    session = session_for(conn)
+    msg = "We are open Monday to Friday from 9:00 AM to 5:00 PM. We take a 12:00 PM to 1:00 PM lunch break."
+    turn, _, _ = say(conn, session, [act("get_office_info", topic="hours"), act("reply", message=msg)], "What are your hours?")
+    assert turn.stop_reason == "replied" and turn.reply == msg
+
+
+def test_regression_invented_phone_number_is_blocked(conn):
+    """Eval: the model added 'Please call us at (555) 123-4567' (not in the office info)."""
+    session = session_for(conn)
+    bad = "We are open weekdays 9 to 5. Please call us at (555) 123-4567 about insurance."
+    turn, _, llm = say(conn, session, [act("get_office_info", topic="hours"), act("reply", message=bad), act("reply", message=bad)],
+                       "What are your hours?")
+    assert "never invent contact details" in llm.calls[2][-1]["content"] and "555" not in turn.reply
