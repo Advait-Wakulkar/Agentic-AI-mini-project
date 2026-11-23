@@ -173,9 +173,15 @@ def _finish_request(session: Session, turn: Turn, request: dict, approved: bool,
 PROVIDER_NAMES = ["Rivera", "Chen", "Okafor"]
 
 
+_SPANISH_DAYS = {"lunes": "monday", "martes": "tuesday", "miércoles": "wednesday", "miercoles": "wednesday",
+                 "jueves": "thursday", "viernes": "friday", "mañana": "tomorrow", "manana": "tomorrow"}
+
+
 def mentions_date(text: str, d: date, today: date) -> bool:
-    """Does the patient's message name this date? (ISO, 'November 24', '11/24', weekday, tomorrow)."""
+    """Does the patient's message name this date? (ISO, 'November 24', '11/24', weekday, tomorrow; Spanish weekdays too)."""
     t = text.lower()
+    for es, en in _SPANISH_DAYS.items():   # found in the demo: "el martes" was not recognised as Tuesday
+        t = re.sub(rf"\b{es}\b", en, t)
     if d.isoformat() in t or f"{d.month}/{d.day}" in t:
         return True
     if re.search(rf"\b{d:%B}\s+{d.day}(st|nd|rd|th)?\b".lower(), t) or re.search(rf"\b{d.day}(st|nd|rd|th)?\s+(of\s+)?{d:%B}\b".lower(), t):
@@ -360,7 +366,7 @@ def _fallback_reply(session: Session, turn: Turn, base: str) -> str:
         # Found in the demo re-run: "Dr. House on Saturday at midnight" ended in a generic error.
         base = (f"{base} We don't have a {turn.unknown_provider}; our dentists are Dr. Rivera, Dr. Chen and Dr. Okafor, "
                 "and we're open weekdays 9:00-17:00.").strip()
-    if (turn.decision or {}).get("intent") == "cancel_or_reschedule":
+    if (turn.decision or {}).get("intent") == "cancel_or_reschedule" and not (turn.turn_slots and _grounded_options(session, turn)):
         mine = tools.list_appointments(session.conn, session.patient_alias)
         if not mine:
             return f"{base} You don't have any upcoming appointments."
@@ -614,6 +620,12 @@ def _prepare_gated(session: Session, turn: Turn, action: str, arg: dict) -> tupl
     new_slot = pick["slot_id"]
     problem = _substitution_problem(session, turn, new_slot)
     if problem:
+        # Found in the 4th demo run: "push that to Wednesday afternoon" (no time) was rightly refused, but the
+        # model never had Wednesday's times to offer and looped. Python looks them up so it can offer them.
+        part = "afternoon" if re.search(r"afternoon|evening|pm\b", turn.user_message, re.I) else (
+               "morning" if re.search(r"morning|am\b", turn.user_message, re.I) else None)
+        offer = tools.list_openings(session.conn, arg["new_date"], current["provider"] if current else arg.get("provider"), part)
+        _remember_slots(turn, "list_openings", offer)
         return problem, None
     return None, tools.prepare_reschedule(session.conn, arg["appointment_id"], new_slot, session.patient_alias, arg["reason"])
 

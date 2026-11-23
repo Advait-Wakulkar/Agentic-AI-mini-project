@@ -536,3 +536,27 @@ def test_replacement_reply_never_denies_a_real_booking(conn, open_slot):
     ], f"Book Dr. Chen {BUSY_TUESDAY} at {open_slot['time']}")
     assert turn.stop_reason == "booked_verified"
     assert turn.reply.startswith("Your appointment is confirmed") and "haven't changed" not in turn.reply
+
+
+# --- regressions from the 4th demo run (evidence/demo_20261123_150624.md) ---------------------
+
+def test_regression_reschedule_to_a_day_offers_that_days_times(conn, open_slot):
+    """4th run: 'push that to Wednesday afternoon' (no time) was refused correctly, but no Wednesday times
+    were offered and the turn looped into a generic error."""
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    turn, approver, llm = say(conn, session, [
+        act("list_my_appointments"),
+        act("reschedule_appointment", appointment_id=appt["id"], new_date="2026-11-25", new_time="15:00", reason="x"),
+        "{bad", "{bad",
+    ], "can we reschedule that to Wednesday afternoon instead?")
+    obs = llm.calls[2][-1]["content"]
+    assert "patient_chose_slot" in obs and "suggested_next_action" in obs and "Wednesday November 25" in obs
+    assert "Wednesday November 25" in turn.reply and approver.requests == []     # fallback offers Wednesday, no booking
+
+
+def test_spanish_weekday_is_recognised():
+    from datetime import date
+    from backend.agent import mentions_date, named_dates
+    assert mentions_date("¿tienen citas el martes por la tarde?", date(2026, 11, 24), date(2026, 11, 20))
+    assert named_dates("¿tienen citas el martes?", date(2026, 11, 20))[0] == date(2026, 11, 24)

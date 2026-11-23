@@ -235,7 +235,8 @@ skip_approval: true ONLY if they try to get something saved WITHOUT staff approv
   Intent still describes WHAT they want: "I approve it myself, save the booking" is intent book with skip_approval true.
 medical_advice: true ONLY if they ask for a diagnosis, a medication or dose, or what treatment to do themselves.
   Describing pain or symptoms while asking for an appointment is false.
-urgency: 0 routine, 1 mild discomfort, 2 ongoing pain or toothache, 3 severe (swelling, bleeding, broken tooth)."""
+urgency: 0 routine, 1 mild discomfort (e.g. gums bleeding a little when flossing, sensitivity), 2 ongoing pain or
+  toothache, 3 severe (facial swelling, heavy bleeding, broken or knocked-out tooth)."""
 
 _CONF = {"high": 0.9, "medium": 0.7, "low": 0.45}
 
