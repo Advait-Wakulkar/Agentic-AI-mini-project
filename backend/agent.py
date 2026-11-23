@@ -99,6 +99,7 @@ class Session:
     active_agent: str = "scheduling"                     # who handled the last turn (follow-ups stay there)
     last_user_message: str = ""
     last_reply: str = ""                                 # the router reads it to understand short follow-ups
+    last_intent: str = ""                                # router intent of the previous message
     owner_id: Optional[str] = None                       # signed-in user who owns this conversation
     events: list = field(default_factory=list)           # finished turns the patient UI has not shown yet
 
@@ -397,6 +398,129 @@ def _someone_else_problem(session: Session, turn: Turn) -> Optional[str]:
             "(or sign in themselves). Do not claim anything was done for them.")
 
 
+_WEEKDAY_DATE = re.compile(r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday),?\s+(?:the\s+)?"
+                           r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+"
+                           r"(\d{1,2})(?:st|nd|rd|th)?\b", re.I)
+_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+           "november", "december"]
+_TIME = re.compile(r"\b(\d{1,2}):(\d{2})\s*(am|pm|a\.m\.|p\.m\.)?|\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)", re.I)
+_PLAN_CLAIM = re.compile(r"\b(we|the office|they|you)\s+(do\s+|does\s+)?(accept|take|cover|work with|are in[- ]network)\b|"
+                         r"\b(is|are)\s+(accepted|covered|in[- ]network)\b", re.I)
+_NEGATION = re.compile(r"\b(not|n't|cannot|can't|unable|no)\b|\?", re.I)
+
+
+def _weekday_mismatch(text: str, today: date) -> Optional[str]:
+    """'Wednesday, November 26' when Nov 26 is a Thursday. Found in the demo re-run."""
+    for wd, month, day in _WEEKDAY_DATE.findall(text):
+        m = _MONTHS.index(month.lower()) + 1
+        year = today.year + (1 if m < today.month else 0)
+        try:
+            d = date(year, m, int(day))
+        except ValueError:
+            continue
+        if f"{d:%A}".lower() != wd.lower():
+            return f"{d:%B} {d.day} is a {d:%A}, not a {wd.capitalize()}."
+    return None
+
+
+def times_in(text: str) -> set[str]:
+    """Clock times written in a reply, as HH:MM (24h)."""
+    out = set()
+    for h1, m1, ap1, h2, ap2 in _TIME.findall(text):
+        h, m, ap = (int(h1), int(m1), ap1) if h1 else (int(h2), 0, ap2)
+        ap = ap.lower().replace(".", "")
+        if ap == "pm" and h < 12:
+            h += 12
+        if ap == "am" and h == 12:
+            h = 0
+        if 0 <= h < 24 and 0 <= m < 60:
+            out.add(f"{h:02d}:{m:02d}")
+    return out
+
+
+def _claims_plan_accepted(text: str) -> bool:
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        if _PLAN_CLAIM.search(sentence) and not _NEGATION.search(sentence):
+            return True
+    return False
+
+
+def _confirmation(request: dict) -> str:
+    d = date.fromisoformat(request["date"])
+    when = f"{d:%A %B} {d.day} at {request['time']} with {request['provider']}"
+    if request.get("action") == "reschedule":
+        return f"Your appointment has been moved to {when}."
+    return f"Your appointment is confirmed: {when}."
+
+
+def _reply_problem(session: Session, turn: Turn, message: str) -> tuple[Optional[str], str]:
+    """The first thing wrong with a reply, and the reply Python would send instead. (None, "") if it is fine."""
+    other = _names_other_patient(session, message)
+    if other:
+        # Demo run: "book my friend Test Patient B" -> reply said "booked for Test Patient B".
+        return (f"your reply mentions another patient ({other}); you only act for {session.patient_alias}.",
+                f"I can only help with appointments for you ({session.patient_alias}). Anyone else needs to contact the office.")
+    if claims_booking(message) and not turn.booked:
+        return ("your reply says an appointment is booked, but nothing was approved, saved and verified in this turn.",
+                _fallback_reply(session, turn, "I haven't changed anything yet."))
+    if claims_change(message) and not turn.changed:
+        return ("your reply says an appointment was cancelled or moved, but nothing like that was approved and verified.",
+                _fallback_reply(session, turn, "I haven't changed anything yet."))
+    wrong = _weekday_mismatch(message, session.today)
+    if wrong:
+        return (f"a weekday in your reply is wrong: {wrong} Use the dates exactly as the tools returned them.",
+                _confirmation(turn.booked) if turn.booked else _fallback_reply(session, turn, "Let me restate that."))
+    if turn.booked:
+        b = turn.booked
+        if not mentions_time(message, b["time"]):
+            # Eval: booked Monday 13:30 and told the patient "Tuesday".
+            return (f"the verified appointment is {b['date']} at {b['time']} with {b['provider']}; state exactly this.",
+                    _confirmation(b))
+        allowed = {b["time"]} | ({b["from"]["time"]} if b.get("from") else set())
+        extra = times_in(message) - allowed
+        if extra and claims_booking(message):
+            # Demo re-run: one slot booked, reply said "I've booked your 9:00 AM and 1:00 PM slots".
+            return (f"only {b['time']} was booked; your reply also mentions {', '.join(sorted(extra))} as if booked.",
+                    _confirmation(b))
+    if _claims_plan_accepted(message):
+        # Demo re-run: "We do accept Delta Dental" although the office info says coverage is confirmed by staff.
+        return ("the office info does not say which insurance plans are accepted; do not claim any plan is accepted.",
+                tools.OFFICE_INFO["insurance"])
+    return None, ""
+
+
+_DATE_NEGATION = re.compile(r"\b(not|n't|no good|doesn't work|instead of|other than|except|besides|rather than)\b", re.I)
+
+
+def _wrong_date_problem(session: Session, turn: Turn, looked_up: str) -> Optional[str]:
+    """Python rule: if the patient named a day, look up THAT day. Found in the demo re-run: "push that to
+    Wednesday afternoon" -> the model searched Thursday and called it Wednesday."""
+    if _DATE_NEGATION.search(turn.user_message):
+        return None   # "Monday doesn't work, what else?" names a day to avoid
+    named = named_dates(turn.user_message, session.today)
+    if named and looked_up not in {d.isoformat() for d in named}:
+        d = named[0]
+        return (f"check 'use_named_date': the patient asked for {d:%A} {d.isoformat()}, but you looked up {looked_up}. "
+                f"Look up {d.isoformat()}.")
+    return None
+
+
+_NEW_VISIT = re.compile(r"\b(another|new|additional|second|extra|also|as well|too|separate)\b", re.I)
+
+
+def _book_while_rescheduling_problem(session: Session, turn: Turn, action: str) -> Optional[str]:
+    """Python rule: if the patient was moving an appointment, the time they pick moves it; it is not a new booking.
+    Found in the demo re-run: 'the first one is fine' after reschedule options became a second appointment."""
+    if action != "book_appointment" or session.last_intent != "cancel_or_reschedule" or _NEW_VISIT.search(turn.user_message):
+        return None
+    mine = tools.list_my_appointments(session.conn, session.patient_alias)["appointments"]
+    if not mine:
+        return None
+    listing = "; ".join(f"#{m['appointment_id']} {m['date']} {m['time']} with {m['provider']}" for m in mine)
+    return (f"check 'reschedule_not_book': the patient is moving an existing appointment ({listing}), not adding one. "
+            "Use reschedule_appointment with the appointment_id and the new date and time they picked.")
+
+
 def _one_request_problem(turn: Turn) -> Optional[str]:
     """Python rule: at most one book / cancel / reschedule request per patient message."""
     if any(s["kind"] == "APPROVAL_REQUESTED" for s in turn.steps):
@@ -435,7 +559,16 @@ def _prepare_gated(session: Session, turn: Turn, action: str, arg: dict) -> tupl
     if found.get("status") != "available":
         return None, {"ok": False, **{k: v for k, v in found.items() if k != "ok"},
                       "next_step": "That new time is not available. Offer the alternatives and ask the patient to choose."}
-    new_slot = found["slots"][0]["slot_id"]
+    # Several dentists can be free at that time. Prefer the slot the patient was just offered, then the dentist of the
+    # current appointment. (Found in a test: "the first one" = Dr. Chen 13:00, but Python picked Dr. Rivera 13:00.)
+    offered = {o["slot_id"] for o in session.last_offered}
+    current = next((a for a in tools.list_appointments(session.conn, session.patient_alias)
+                    if str(a["id"]) == str(arg["appointment_id"])), None)
+    candidates = found["slots"]
+    pick = (next((c for c in candidates if c["slot_id"] in offered), None)
+            or next((c for c in candidates if current and c["provider"] == current["provider"]), None)
+            or candidates[0])
+    new_slot = pick["slot_id"]
     problem = _substitution_problem(session, turn, new_slot)
     if problem:
         return problem, None
@@ -504,6 +637,14 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
                     return stopped
                 continue
 
+        if action in ("list_openings", "check_availability"):
+            problem = _wrong_date_problem(session, turn, arg["date"])
+            if problem:
+                stopped = _reject(session, turn, problem)
+                if stopped:
+                    return stopped
+                continue
+
         # 3a. Hand-off between agents (at most once per turn, so they cannot ping-pong)
         if action == "transfer":
             target = arg["to"]
@@ -526,55 +667,33 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
                                      "note": f"You are now the {target} agent. Continue helping the patient."})
             continue
 
-        # 3b. Final reply, with output guardrails checked against the database
+        # 3b. Final reply, with output guardrails checked against the database (first failing check wins:
+        #     sent back to the model once, then replaced by a reply Python writes from the facts)
         if action == "reply":
             message = arg["message"]
-            other = _names_other_patient(session, message)
-            if other:
-                # Found in the demo run: "book my friend Test Patient B" -> booked for the signed-in patient, but
-                # the reply said "booked for Test Patient B". Replies may only talk about this patient.
+            problem, fallback = _reply_problem(session, turn, message)
+            if problem:
                 if not turn.guard_retried:
                     turn.guard_retried = True
-                    obs = {"ok": False, "rejected": True, "errors": [
-                        f"check 'grounded_reply': your reply mentions another patient ({other}). You only act for "
-                        f"{session.patient_alias}. Rewrite the reply about {session.patient_alias} only."]}
+                    obs = {"ok": False, "rejected": True, "errors": [f"check 'grounded_reply': {problem} Rewrite the reply."]}
                     _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
                     _observe(session, turn, obs)
                     continue
-                _log(turn, "OUTPUT_GUARD", passed=False, action="replaced")
-                return _stop(session, turn, "reply_corrected",
-                             f"I can only help with appointments for you ({session.patient_alias}). Anyone else needs to "
-                             "contact the office themselves.")
-            false_booking = claims_booking(message) and not turn.booked
-            false_change = claims_change(message) and not turn.changed
-            if false_booking or false_change:
-                what = "an appointment is booked" if false_booking else "an appointment was cancelled or moved"
-                if not turn.guard_retried:
-                    turn.guard_retried = True
-                    obs = {"ok": False, "rejected": True, "errors": [
-                        f"check 'grounded_reply': your reply says {what}, but nothing like that was approved, "
-                        "carried out and verified in this turn. Do not claim it. Rewrite the reply."]}
-                    _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
-                    _observe(session, turn, obs)
-                    continue
-                _log(turn, "OUTPUT_GUARD", passed=False, action="replaced")
-                return _stop(session, turn, "reply_corrected", _fallback_reply(session, turn, "I haven't changed anything yet."))
-            if turn.booked and not mentions_time(message, turn.booked["time"]) and not turn.guard_retried:
-                # Found in eval: model booked Monday 13:30 and told the patient "Tuesday". Make it restate the facts.
-                turn.guard_retried = True
-                b = turn.booked
-                obs = {"ok": False, "rejected": True, "errors": [
-                    f"check 'grounded_reply': the verified appointment is {b['date']} at {b['time']} with {b['provider']}. "
-                    "Your reply must state exactly this date and time."]}
-                _log(turn, "OUTPUT_GUARD", passed=False, observation=obs)
-                _observe(session, turn, obs)
-                continue
+                _log(turn, "OUTPUT_GUARD", passed=False, action="replaced", problem=problem)
+                reason = VERIFIED_STOP.get(turn.done_action, "reply_corrected") if turn.done_action else "reply_corrected"
+                return _stop(session, turn, reason, fallback)
             _log(turn, "OUTPUT_GUARD", passed=True)
             return _stop(session, turn, VERIFIED_STOP.get(turn.done_action, "replied"), message)
 
         # 3c. Book / cancel / reschedule: Python checks, then the HUMAN approval gate
         if action in GATED:
-            problem = _one_request_problem(turn) or _someone_else_problem(session, turn)
+            if _someone_else_problem(session, turn):
+                # Found in the demo re-run: the refusal looped until "I ran into a problem". Answer plainly instead.
+                _log(turn, "VALIDATION", passed=False, errors=[_someone_else_problem(session, turn)])
+                return _stop(session, turn, "declined",
+                             f"I can only book, cancel or move appointments for you ({session.patient_alias}). The other "
+                             "person will need to contact the office (or sign in themselves). Can I help with your own appointments?")
+            problem = _one_request_problem(turn) or _book_while_rescheduling_problem(session, turn, action)
             if problem:
                 stopped = _reject(session, turn, problem)
                 if stopped:
@@ -707,6 +826,7 @@ def run_turn(session: Session, user_message: str, llm, decider, approver: Approv
         _loop(session, turn, llm, approver, channel)
 
     session.last_user_message = user_message
+    session.last_intent = (turn.decision or {}).get("intent", "")
     if save:
         _save_record(session, turn, llm, getattr(decider, "name", "?"))
     return turn

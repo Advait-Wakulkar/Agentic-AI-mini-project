@@ -330,8 +330,8 @@ def test_regression_cannot_book_for_a_friend(conn):
         act("reply", message="Appointment booked for Test Patient B at 10:00."),
     ], "Can you book my friend Test Patient B in for 10am Monday too?")
     assert approver.requests == [] and count_appointments(conn) == 0
-    assert "only_this_patient" in llm.calls[1][-1]["content"]
-    assert turn.stop_reason == "reply_corrected" and "Test Patient B" not in turn.reply
+    assert turn.stop_reason == "declined" and "Test Patient B" not in turn.reply
+    assert "only book, cancel or move appointments for you" in turn.reply and len(llm.calls) == 1   # direct answer
 
 
 def test_my_son_counts_as_someone_else(conn, open_slot):
@@ -340,7 +340,7 @@ def test_my_son_counts_as_someone_else(conn, open_slot):
         act("book_appointment", slot_id=open_slot["slot_id"], reason="x"),
         act("reply", message="I can only book for you; your son will need to contact the office."),
     ], f"Book my son in on {BUSY_TUESDAY} at {open_slot['time']}")
-    assert approver.requests == [] and "only_this_patient" in llm.calls[1][-1]["content"]
+    assert approver.requests == [] and turn.stop_reason == "declined"
 
 
 def test_regression_only_one_booking_per_message(conn):
@@ -375,3 +375,79 @@ def test_regression_emergency_gets_urgent_reply(conn):
 def test_insurance_and_prices_have_honest_answers(conn):
     assert "cannot confirm" in tools.get_office_info(conn, "insurance")["info"]
     assert "quote" in tools.get_office_info(conn, "prices")["info"]
+
+
+# --- regressions from the demo RE-run (evidence/demo_20261123_141355.md) ----------------------
+
+def test_regression_wrong_weekday_in_reply_is_corrected(conn, open_slot):
+    """Re-run: 'Your appointment is confirmed: Wednesday, November 26' (Nov 26 is a Thursday)."""
+    session = session_for(conn)
+    turn, _, llm = say(conn, session, [
+        act("book_appointment", slot_id=open_slot["slot_id"], reason="x"),
+        act("reply", message=f"Confirmed: Wednesday, November 24 at {open_slot['time']}."),
+        act("reply", message=f"Confirmed: Wednesday, November 24 at {open_slot['time']}."),
+    ], f"Book Dr. Chen {BUSY_TUESDAY} at {open_slot['time']}")
+    assert "is a Tuesday, not a Wednesday" in llm.calls[2][-1]["content"]
+    assert turn.stop_reason == "booked_verified" and turn.reply.startswith("Your appointment is confirmed: Tuesday November 24")
+
+
+def test_regression_confirmation_cannot_invent_extra_times(conn):
+    """Re-run: one slot booked, reply said 'I've booked your 9:00 AM and 1:00 PM slots'."""
+    session = session_for(conn)
+    s1 = tools.list_openings(conn, "2026-11-23", provider="Dr. Chen")["openings"][0]
+    turn, _, llm = say(conn, session, [
+        act("book_appointment", slot_id=s1["slot_id"], reason="x"),
+        act("reply", message=f"I've booked your {s1['time']} and 13:00 slots with Dr. Chen."),
+        act("reply", message=f"I've booked your {s1['time']} and 13:00 slots with Dr. Chen."),
+    ], f"Book me at {s1['time']} on Monday November 23 with Dr. Chen")
+    assert "also mentions 13:00" in llm.calls[2][-1]["content"]
+    assert "13:00" not in turn.reply and s1["time"] in turn.reply
+
+
+def test_regression_no_claim_that_a_plan_is_accepted(conn):
+    """Re-run: 'We do accept Delta Dental' although the office info says staff confirm coverage."""
+    session = session_for(conn)
+    turn, _, llm = say(conn, session, [
+        act("get_office_info", topic="insurance"),
+        act("reply", message="We do accept Delta Dental, but the front desk checks coverage."),
+        act("reply", message="We do accept Delta Dental."),
+    ], "do you guys take Delta Dental insurance?")
+    assert turn.agent == "faq" and "do not claim any plan is accepted" in llm.calls[2][-1]["content"]
+    assert turn.reply == tools.OFFICE_INFO["insurance"]
+
+
+def test_regression_picking_a_time_while_rescheduling_moves_it(conn, open_slot):
+    """Re-run: after reschedule options, 'the first one is fine' became a SECOND appointment."""
+    session = session_for(conn)
+    appt = book(conn, session, open_slot)
+    wed = tools.list_openings(conn, "2026-11-25", provider="Dr. Chen", part_of_day="afternoon")["openings"]
+    say(conn, session, [act("list_openings", date="2026-11-25", provider="Dr. Chen", part_of_day="afternoon"),
+                        act("reply", message=f"Dr. Chen is free Wednesday November 25 at {wed[0]['time']} or {wed[1]['time']}. Which works?")],
+        "can we reschedule that to Wednesday afternoon instead?")
+    turn, approver, llm = say(conn, session, [
+        act("book_appointment", slot_id=wed[0]["slot_id"], reason="x"),
+        act("reschedule_appointment", appointment_id=appt["id"], new_date="2026-11-25", new_time=wed[0]["time"], reason="x"),
+        act("reply", message=f"Moved to Wednesday November 25 at {wed[0]['time']}."),
+    ], "the first one is fine")
+    assert "reschedule_not_book" in llm.calls[1][-1]["content"]
+    assert turn.stop_reason == "rescheduled_verified"
+    assert [a["slot_id"] for a in tools.list_appointments(conn, PATIENT)] == [wed[0]["slot_id"]]   # one appointment, moved
+
+
+def test_regression_look_up_the_day_the_patient_named(conn):
+    """Re-run: 'Wednesday afternoon' -> the model searched Thursday."""
+    session = session_for(conn)
+    turn, _, llm = say(conn, session, [
+        act("list_openings", date="2026-11-26", provider="Dr. Chen"),
+        act("list_openings", date="2026-11-25", provider="Dr. Chen"),
+        act("reply", message="Here are Wednesday's times. Which would you like?"),
+    ], "is Dr. Chen free Wednesday afternoon?")
+    assert "use_named_date" in llm.calls[1][-1]["content"] and "2026-11-25" in llm.calls[1][-1]["content"]
+
+
+def test_named_day_to_avoid_is_not_forced(conn):
+    session = session_for(conn)
+    turn, _, llm = say(conn, session, [act("list_openings", date="2026-11-25"),
+                                       act("reply", message="Here are Wednesday's times.")],
+                       "Monday doesn't work for me, anything later in the week?")
+    assert not any("use_named_date" in m["content"] for call in llm.calls for m in call)
