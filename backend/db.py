@@ -18,6 +18,7 @@ Only fictional data is stored. Patients are aliases like "Test Patient A".
 import random
 import re
 import threading
+import time
 import uuid
 from datetime import date, datetime, timedelta
 
@@ -188,18 +189,24 @@ class Database:
     def _pg(sql: str) -> str:
         return sql.replace("?", "%s")
 
-    def _execute(self, fn):
-        """Run fn(conn); reconnect once if Supabase dropped an idle connection."""
+    def _execute(self, fn, retries: int = 3):
+        """Run fn(conn). If the connection dropped (idle timeout, network blip), reconnect with
+        backoff and retry. Found in a full eval run: one reconnect attempt was not enough."""
         with self._lock:
-            try:
-                return fn(self.conn)
-            except psycopg.IntegrityError as e:
-                raise IntegrityError(str(e)) from e
-            except psycopg.OperationalError:
-                if self._in_tx:
-                    raise
-                self._connect()
-                return fn(self.conn)
+            for attempt in range(retries + 1):
+                try:
+                    return fn(self.conn)
+                except psycopg.IntegrityError as e:
+                    raise IntegrityError(str(e)) from e
+                except psycopg.OperationalError:
+                    if self._in_tx or attempt == retries:
+                        raise
+                    time.sleep(2 ** attempt)          # 1 s, 2 s, 4 s
+                    try:
+                        self._connect()
+                    except DatabaseError:
+                        if attempt == retries - 1:
+                            raise
 
     def query(self, sql: str, params: tuple = ()) -> list[dict]:
         def go(conn):

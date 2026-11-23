@@ -89,3 +89,22 @@ def test_error_messages_never_contain_credentials():
 
 def test_literal_percent_in_sql_without_params(conn):
     assert conn.one("SELECT COUNT(*) AS n FROM slots WHERE id LIKE 'S-2026%'")["n"] > 0
+
+
+def test_reconnects_with_backoff_after_dropped_connection(conn, monkeypatch):
+    """Found in a full eval run: the connection dropped and a single reconnect attempt timed out."""
+    import psycopg
+    from backend import db as dbmod
+    monkeypatch.setattr(dbmod.time, "sleep", lambda s: None)
+    real_connect, calls = conn._connect, {"n": 0}
+
+    def flaky_connect():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise db.DatabaseError("connection timeout expired")   # first reconnect fails too
+        real_connect()
+
+    monkeypatch.setattr(conn, "_connect", flaky_connect)
+    conn.conn.close()                                               # simulate Supabase dropping us
+    assert conn.one("SELECT COUNT(*) AS n FROM providers")["n"] == 3
+    assert calls["n"] == 2

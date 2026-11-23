@@ -149,8 +149,14 @@ export default function Home() {
           refreshData();
         }
         setPending(ev.pending);
-      } catch {
-        /* keep polling */
+      } catch (e) {
+        // The server restarted and this conversation is gone: stop polling instead of retrying forever.
+        // The request itself is still in the staff queue (it lives in the database).
+        if ((e as Error).message.includes("has ended")) {
+          setPending(null);
+          setMessages((ms) => [...ms, { role: "system", text:
+            "This conversation ended because the server restarted. Your request is still with our staff; check My appointments later." }]);
+        } /* otherwise a temporary network error: keep polling */
       }
     }, 3000);
     return () => clearInterval(t);

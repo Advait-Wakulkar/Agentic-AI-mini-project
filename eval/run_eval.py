@@ -248,8 +248,11 @@ def main():
     try:
         _run(args, today, llm, decider, conn)
     finally:
-        conn.drop_schema()
-        conn.close()
+        try:
+            conn.drop_schema()
+            conn.close()
+        except Exception as e:  # a dropped connection must not hide the results
+            print(f"Warning: could not drop eval schema {conn.schema} ({e}); remove it later with DROP SCHEMA ... CASCADE.")
 
 
 def _run(args, today, llm, decider, conn):
