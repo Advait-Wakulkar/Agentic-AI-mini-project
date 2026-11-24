@@ -174,7 +174,7 @@ PROVIDERS = {
     "openai":     {"kind": "openai", "base_url": "https://api.openai.com/v1",
                    "key_env": "OPENAI_API_KEY", "default": "gpt-4.1-mini"},
     "openrouter": {"kind": "openai", "base_url": "https://openrouter.ai/api/v1",
-                   "key_env": "OPENROUTER_API_KEY", "default": "qwen/qwen3-32b"},
+                   "key_env": "OPENROUTER_API_KEY", "default": "anthropic/claude-haiku-5.5"},
     "gemini":     {"kind": "openai", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
                    "key_env": "GEMINI_API_KEY", "default": "gemini-2.5-flash"},
     "claude":     {"kind": "claude", "key_env": "ANTHROPIC_API_KEY", "default": "claude-haiku-5-5"},

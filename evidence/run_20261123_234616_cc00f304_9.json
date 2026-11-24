@@ -1,0 +1,159 @@
+{
+  "session": "cc00f304",
+  "timestamp": "2026-11-23T23:46:16",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-23",
+  "patient_alias": "Test Patient A",
+  "user_message": "cancel the appointment",
+  "decision": {
+    "intent": "cancel_or_reschedule",
+    "intent_probs": {
+      "book": 0.033,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.9,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "cancel_or_reschedule",
+        "intent_probs": {
+          "book": 0.033,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.9,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=cancel_or_reschedule"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_my_appointments\", \"argument\": {}}",
+      "proposal": {
+        "action": "list_my_appointments",
+        "argument": {}
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_my_appointments",
+      "observation": {
+        "ok": true,
+        "appointments": [
+          {
+            "appointment_id": 114,
+            "date": "2026-11-26",
+            "time": "14:00",
+            "provider": "Dr. Rivera",
+            "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name."
+          }
+        ]
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"cancel_appointment\", \"argument\": {\"appointment_id\": 114, \"reason\": \"Patient asked to cancel their appointment on Thursday 26 November at 14:00 with Dr. Rivera.\"}}",
+      "proposal": {
+        "action": "cancel_appointment",
+        "argument": {
+          "appointment_id": 114,
+          "reason": "Patient asked to cancel their appointment on Thursday 26 November at 14:00 with Dr. Rivera."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "action": "cancel",
+        "appointment_id": 114,
+        "slot_id": "S-20261126-1400-P1",
+        "date": "2026-11-26",
+        "time": "14:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient asked to cancel their appointment on Thursday 26 November at 14:00 with Dr. Rivera.",
+        "patient_request": "cancel the appointment"
+      },
+      "request_id": 4
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "awaiting_approval",
+      "reply": "I've sent your request to cancel 2026-11-26 at 14:00 with Dr. Rivera to our staff for approval. I'll update you here."
+    }
+  ],
+  "final_reply": "I've sent your request to cancel 2026-11-26 at 14:00 with Dr. Rivera to our staff for approval. I'll update you here.",
+  "stop_reason": "awaiting_approval",
+  "seconds": 4.45,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261126-1400-P1",
+      "date": "2026-11-26",
+      "time": "14:00",
+      "provider": "Dr. Rivera",
+      "patient_alias": "Test Patient A",
+      "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.",
+      "approval_id": 114,
+      "status": "booked",
+      "created_at": "2026-11-23T23:40:41",
+      "cancelled_at": null
+    }
+  ]
+}

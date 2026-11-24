@@ -212,7 +212,18 @@ def mentions_time(text: str, hhmm: str) -> bool:
     patterns = [rf"\b{h:02d}:{m:02d}\b", rf"\b{h}:{m:02d}\b", rf"\b{h12}:{m:02d}\s*({suffix})?\b"]
     if m == 0:
         patterns += [rf"\b{h12}\s*{suffix}\b", rf"\b{h12}\s*o'?clock\b", rf"\bat {h12}\b(?!:)"]
+    # Spoken times, found in a live UI run: "half ten" (10:30) was not recognised.
+    word = _HOUR_WORDS[h12]
+    spoken = {0: [rf"\b{word}\s+o'?clock\b"],
+              30: [rf"\bhalf\s+(past\s+)?({word}|{h12})\b", rf"\b{word}[\s-]+thirty\b"],
+              15: [rf"\bquarter\s+past\s+({word}|{h12})\b", rf"\b{word}[\s-]+fifteen\b"],
+              45: [rf"\bquarter\s+to\s+({_HOUR_WORDS[h12 % 12 + 1]}|{h12 % 12 + 1})\b", rf"\b{word}[\s-]+forty[\s-]+five\b"]}
+    patterns += spoken.get(m, [])
     return any(re.search(p, t) for p in patterns)
+
+
+_HOUR_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight",
+               9: "nine", 10: "ten", 11: "eleven", 12: "twelve"}
 
 
 def _substitution_problem(session: Session, turn: Turn, slot_id: str) -> Optional[str]:
@@ -666,7 +677,8 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
         _log(turn, "MODEL_PROPOSED", raw=raw[:2000], proposal=proposal)
         if errors:
             stopped = _reject(session, turn, errors[0] if len(errors) == 1 else "; ".join(errors),
-                              {"hint": "Fix the proposal and reply with one valid JSON action."})
+                              {"hint": "Fix the proposal and reply with one valid JSON action. The patient did not "
+                                       "see your rejected output, so do not apologise for or mention it."})
             if stopped:
                 return stopped
             continue

@@ -67,6 +67,10 @@ def test_mentions_date(text, iso, ok):
 @pytest.mark.parametrize("text, hhmm, ok", [
     ("at 13:30", "13:30", True), ("1:30pm", "13:30", True), ("9am", "09:00", True),
     ("at 9", "09:00", True), ("9:30", "09:00", False), ("November 24", "09:00", False),
+    # spoken times (live UI run with Claude Haiku 5.5: "half ten sounds good" was blocked)
+    ("half ten sounds good", "10:30", True), ("half past two", "14:30", True), ("ten thirty", "10:30", True),
+    ("quarter past nine", "09:15", True), ("ten o'clock", "10:00", True), ("half ten", "10:00", False),
+    ("half ten", "11:30", False),
 ])
 def test_mentions_time(text, hhmm, ok):
     from backend.agent import mentions_time

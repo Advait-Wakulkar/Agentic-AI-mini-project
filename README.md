@@ -59,7 +59,7 @@ The browser only talks to Next.js, which proxies `/api/*` to FastAPI ([frontend/
 | `openai` | `OPENAI_API_KEY` | Hosted, paid | `gpt-4.1-mini` |
 | `claude` | `ANTHROPIC_API_KEY` | Hosted, paid | `claude-haiku-5-5` |
 | `gemini` | `GEMINI_API_KEY` | Hosted, free tier | `gemini-2.5-flash` |
-| `openrouter` | `OPENROUTER_API_KEY` | Hosted; one key for hundreds of models | `qwen/qwen3-32b` (any id, e.g. `anthropic/...`) |
+| `openrouter` | `OPENROUTER_API_KEY` | Hosted; one key for hundreds of models | **`anthropic/claude-haiku-5.5`** (the tested pick; any id works) |
 | `custom` | `OPENAI_COMPAT_BASE_URL` (+ optional key) | Any OpenAI-compatible server: LM Studio, vLLM, Together… | set `LLM_MODEL` |
 
 Three ways to switch: `.env` (`LLM_PROVIDER`, `LLM_MODEL`), CLI flags (`--provider openrouter --model ...`),
@@ -211,6 +211,32 @@ add a visit"), look-alike words ("How much is a cleaning?" is not medical; "Is t
 attempts in plain words, pain while booking, and follow-ups that need the previous reply ("the later one").
 With the new router the full scenario eval stayed at **33/33, 0 false bookings** (`20261123_133828`; all 39 routing
 decisions answered by the router, none by the backup). Run: `.venv/bin/python -m eval.decider_eval`.
+
+### Model comparison (same harness, same router, agents swapped)
+
+The agents run on **Claude Haiku 5.5 via OpenRouter** (`LLM_PROVIDER=openrouter`, `LLM_MODEL=anthropic/claude-haiku-5.5`).
+Every model below used the same prompts, Python checks, approval gate and Jev Router. Eval = 11 scenarios × 3 runs
+(`eval/results/20261123_*`); demo = the 23-message logged demo, 6 workflow turns plus 17 tricky ones (`evidence/demo_20261123_*`).
+
+| Agent model | Price in/out per 1M tokens | Scenario eval | Tricky-language demo | Time per turn |
+|---|---|---|---|---|
+| **Claude Haiku 5.5** (chosen) | $0.10 / $0.50 | **33/33**, 0 false bookings | Workflow complete; best replies of the cheap models (Spanish, "tmrw arnd 2ish" → "tomorrow is Saturday", explains every refusal) | **~5 s** |
+| DeepSeek V4.1 Flash | $0.03 / $0.20 | 33/33 | Workflow complete; very good; 1 reply replaced by the output guard | ~6 s |
+| GPT-5.6 Luna | $0.20 / $1.20 | 33/33 | Workflow complete; accurate but terse; 1 reply replaced | ~6 s |
+| Gemini 3.8 Flash | $0.83 / $4.12 | 33/33 | Workflow complete; good, wordy | ~8 s |
+| Qwen3.8 Flash | $0.15 / $0.47 | 33/33 | Workflow complete; weaker on capability gaps | ~11 s |
+| GPT-4o-mini (previous pick) | $0.15 / $0.60 | 33/33 | Workflow complete; good | ~6 s |
+| Qwen3 32B | $0.08 / $0.28 | 30/33 (asks "are you sure?" before cancelling) | Workflow complete; very natural | ~28 s |
+| GPT-6 Luna | $0.10 / $0.50 | 31/33 (2 provider errors, not wrong actions) | — | — |
+| GPT-5 mini | $0.25 / $2.00 | 33/33 | — (reasoning model, slow) | — |
+| Claude Sonnet 5.5 | $2.00 / $10.00 | 33/33 | — (higher price tier) | — |
+| qwen3:1.7b (local, Ollama) | free, offline | 33/33, but needed many Python corrections | Erratic (one workflow run broke) | ~8 s |
+
+All models had **0 false bookings**: the database, not the model, decides what is saved. The scenario eval is
+saturated for capable models, so the tricky-language demo decided the pick. Switching models also surfaced two
+harness bugs, both now fixed with tests: a rejected proposal made Haiku apologise for a message the patient never
+saw (the rejection note now says so), and the "patient chose this slot" check did not understand spoken times
+like "half ten" (found live in the UI).
 
 Three runs per scenario is a small sample, and the fixes were developed against these same scenarios,
 so new wording may still expose failures.
