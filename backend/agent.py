@@ -66,16 +66,41 @@ _NOT_A_CLAIM = re.compile(
 )
 
 
-def _claims(text: str, word: re.Pattern) -> bool:
+_SET_ONLY = re.compile(r"\b(all set|you'?re set|is set)\b", re.I)
+_APPOINTMENT_WORD = re.compile(r"\b(appointments?|bookings?|visits?|cleaning|check-?up|slot|you'?re all set|you are all set)\b", re.I)
+_ISO_DATE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+_MONTH_DATE = re.compile(r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+"
+                         r"(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b", re.I)
+
+
+def _mentions_past_date(sentence: str, today: date) -> bool:
+    """'... on 2026-09-20 was cancelled' describes the patient's HISTORY, not something done now."""
+    found = [(int(y), int(m), int(d)) for y, m, d in _ISO_DATE.findall(sentence)]
+    found += [(int(y), _MONTHS.index(mo.lower()) + 1, int(d)) for mo, d, y in _MONTH_DATE.findall(sentence)]
+    for y, m, d in found:
+        try:
+            if date(y, m, d) < today:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _claims(text: str, word: re.Pattern, today: Optional[date] = None) -> bool:
     for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
         if word.search(sentence) and not _NOT_A_CLAIM.search(sentence):
             if re.search(r"\b(is|are) booked\b", sentence, re.I) and not re.search(r"\b(you|your)\b", sentence, re.I):
                 continue  # "Dr. Rivera is booked at 9:00" describes the schedule, not the patient's booking
+            if word is _CLAIM_WORD and _SET_ONLY.search(sentence) and not _CLAIM_WORD.search(_SET_ONLY.sub("", sentence)) \
+                    and not _APPOINTMENT_WORD.search(sentence):
+                continue  # eval: "Your name, date of birth and self-pay status are all set" is about intake details
+            if today is not None and _mentions_past_date(sentence, today):
+                continue  # eval: "A cleaning scheduled for 2026-09-20 was cancelled" is visit history
             return True
     return False
 
 
-def claims_booking(text: str) -> bool:
+def claims_booking(text: str, today: Optional[date] = None) -> bool:
     """Does any sentence tell the patient an appointment IS booked/confirmed?
 
     Found in eval (qwen3:1.7b, 2026-11-22): "Appointment confirmed for Tuesday ..." with
@@ -83,12 +108,12 @@ def claims_booking(text: str) -> bool:
     confirm/booked/scheduled/reserved word counts, unless it is negated, a question,
     conditional, or about a time being unavailable ("9:00 is already booked").
     """
-    return _claims(text, _CLAIM_WORD)
+    return _claims(text, _CLAIM_WORD, today)
 
 
-def claims_change(text: str) -> bool:
+def claims_change(text: str, today: Optional[date] = None) -> bool:
     """Does any sentence say an appointment WAS cancelled / rescheduled / moved?"""
-    return _claims(text, _CHANGE_WORD)
+    return _claims(text, _CHANGE_WORD, today)
 
 
 @dataclass
@@ -108,6 +133,7 @@ class Session:
     last_intent: str = ""                                # router intent of the previous message
     owner_id: Optional[str] = None                       # signed-in user who owns this conversation
     events: list = field(default_factory=list)           # finished turns the patient UI has not shown yet
+    insurance_check: Optional[dict] = None               # last (simulated) eligibility result in this conversation
 
 
 @dataclass
@@ -132,6 +158,7 @@ class Turn:
     started: float = field(default_factory=time.time)
     record_path: Optional[str] = None
     on_step: Optional[Callable[[dict], None]] = None   # live trace printer (CLI)
+    patient_context: Optional[str] = None              # patient record for the prompt; None = (re)load from the DB
 
 
 def _log(turn: Turn, kind: str, **data):
@@ -339,7 +366,18 @@ def _offered_in_reply(session: Session, turn: Turn, reply: str) -> list[dict]:
         offered = [s for s in offered if any(p in s["provider"] for p in named)] or offered
     dated = [s for s in offered if mentions_date(reply, date.fromisoformat(s["date"]), session.today)]
     offered = dated or offered
-    return sorted(offered, key=lambda s: (s["date"], s["time"], s["provider"]))
+    # Keep the order the PATIENT saw, so "the first one" means the first one listed. Found in the demo run: the reply
+    # listed "1. 09:00 Dr. Rivera, 2. 09:00 Dr. Chen", but sorting by name made "the first one" Dr. Chen.
+    text = re.sub(r"\b(Dr|Mr|Mrs|Ms)\.\s", r"\1 ", reply)          # so "Dr. Rivera" is not split at the period
+    segments = [seg for seg in re.split(r"\n+|;|(?<=[.!?])\s+|\s(?=\d[.)]\s)", text) if seg.strip()]
+
+    def shown_at(s):
+        surname = s["provider"].replace("Dr. ", "")
+        for i, seg in enumerate(segments):
+            if mentions_time(seg, s["time"]) and (surname in seg or not any(p in seg for p in PROVIDER_NAMES)):
+                return i, max(seg.find(surname), 0)        # "09:00 with Dr. Rivera or Dr. Chen": Rivera first
+        return len(segments), 0
+    return sorted(offered, key=lambda s: (shown_at(s), s["date"], s["time"], s["provider"]))
 
 
 def _remember_slots(turn: Turn, action: str, obs: dict) -> None:
@@ -389,10 +427,15 @@ def _fallback_reply(session: Session, turn: Turn, base: str) -> str:
         listing = "; ".join(f"{date.fromisoformat(a['date']):%A %B} {date.fromisoformat(a['date']).day} at {a['time']} "
                             f"with {a['provider']}" for a in mine)
         return f"{base} Your upcoming appointments: {listing}. Which one do you mean, and what would you like to do?"
+    if not tools.is_registered(session.conn, session.patient_alias):
+        # Eval: a new patient's replaced reply asked "Could you tell me a day or time?" instead of for their details.
+        return (f"{base} To register you as a new patient I need your first and last name, date of birth, phone, email "
+                "and insurance (plan and member ID, or self-pay). This is a demo, so please use made-up details: a phone "
+                "number from 555-0100 to 555-0199 and an email ending in @example.com.").strip()
     options = _grounded_options(session, turn)
     if options:
-        return f"{base} The open times are: {_options_text(options)}. Which would you like?"
-    return f"{base} Could you tell me a day or time that works for you?"
+        return f"{base} The open times are: {_options_text(options)}. Which would you like?".strip()
+    return f"{base} Could you tell me a day or time that works for you?".strip()
 
 
 def _stop(session: Session, turn: Turn, reason: str, reply: str) -> Turn:
@@ -483,14 +526,45 @@ def _claims_plan_accepted(text: str) -> bool:
     return False
 
 
-def _invented_phone(text: str) -> Optional[str]:
-    """A phone number the office info does not contain. Found in eval: the model made up '(555) 123-4567'."""
-    known = " ".join(tools.OFFICE_INFO.values())
-    for m in _PHONE.findall(text):
-        digits = re.sub(r"\D", "", m)
-        if len(digits) >= 7 and digits not in re.sub(r"\D", "", known):
-            return m.strip()
+_SHORT_PHONE = re.compile(r"\b555[\s.-]?01\d{2}\b")   # the fictional patient numbers, 555-0100..0199
+
+
+def _patient_said(session: Session) -> str:
+    """Everything the PATIENT typed in this conversation (not observations, not the model)."""
+    return "\n".join(m["content"] for m in session.history
+                     if m["role"] == "user" and not m["content"].startswith("OBSERVATION:"))
+
+
+def _invented_phone(text: str, session: Optional[Session] = None) -> Optional[str]:
+    """A phone number the office info does not contain. Found in eval: the model made up '(555) 123-4567'.
+    The patient's own number (on file, or typed in this chat) is fine to repeat back."""
+    # The demo-range limits may be quoted when asking for a made-up number (found live: "555-0100 to 555-0199" was flagged).
+    known = " ".join(tools.OFFICE_INFO.values()) + " 555-0100 555-0199"
+    if session is not None:
+        profile = tools.get_profile(session.conn, session.patient_alias) or {}
+        known += " " + (profile.get("phone") or "") + " " + _patient_said(session)
+    known_digits = re.sub(r"\D", "", known)
+    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+        # Eval: "use a number in the demo range (for example, 555-0142)" is an example for the patient, not a contact.
+        example = _EXAMPLE_NUMBER.search(sentence)
+        for m in _PHONE.findall(sentence) + _SHORT_PHONE.findall(sentence):
+            digits = re.sub(r"\D", "", m)
+            if example and _SHORT_PHONE.fullmatch(m.strip()):
+                continue
+            if len(digits) >= 7 and digits[-7:] not in known_digits:
+                return m.strip()
     return None
+
+
+_EXAMPLE_NUMBER = re.compile(r"(\bfor example\b|\be\.g\.|\bsuch as\b|\brange\b|\bmade[- ]up\b|\bdemo\b|\bfictional\b)", re.I)
+
+
+def _insurance_verified_in_network(session: Session) -> bool:
+    """A (simulated) eligibility check in this conversation, or on file, found the plan in network."""
+    if session.insurance_check and session.insurance_check.get("in_network"):
+        return True
+    profile = tools.get_profile(session.conn, session.patient_alias) or {}
+    return profile.get("insurance_status") == "verified_in_network"
 
 
 def _confirmation(request: dict) -> str:
@@ -511,10 +585,10 @@ def _reply_problem(session: Session, turn: Turn, message: str) -> tuple[Optional
     # The replacement must say what really happened (found in eval: a booking WAS made, and the replacement
     # reply said "I haven't changed anything yet").
     done = _confirmation(turn.booked) if turn.booked else ("Your appointment has been cancelled." if turn.changed else None)
-    if claims_booking(message) and not turn.booked:
+    if claims_booking(message, session.today) and not turn.booked:
         return ("your reply says an appointment is booked, but nothing was approved, saved and verified in this turn.",
                 done or _fallback_reply(session, turn, "I haven't changed anything yet."))
-    if claims_change(message) and not turn.changed:
+    if claims_change(message, session.today) and not turn.changed:
         what = "your reply says an appointment was cancelled or moved, but nothing like that was approved and verified."
         if turn.booked:
             return what + " A NEW appointment was booked; say exactly that.", _confirmation(turn.booked) + " Your other appointments are unchanged."
@@ -531,18 +605,19 @@ def _reply_problem(session: Session, turn: Turn, message: str) -> tuple[Optional
                     _confirmation(b))
         allowed = {b["time"]} | ({b["from"]["time"]} if b.get("from") else set())
         extra = times_in(message) - allowed
-        if extra and claims_booking(message):
+        if extra and claims_booking(message, session.today):
             # Demo re-run: one slot booked, reply said "I've booked your 9:00 AM and 1:00 PM slots".
             return (f"only {b['time']} was booked; your reply also mentions {', '.join(sorted(extra))} as if booked.",
                     _confirmation(b))
-    phone = _invented_phone(message)
+    phone = _invented_phone(message, session)
     if phone:
         return (f"your reply gives a phone number ({phone}) that is not in the office info; never invent contact details.",
                 _fallback_reply(session, turn, "") if turn.agent == "scheduling" and not turn.booked
                 else (_confirmation(turn.booked) if turn.booked else
                       "Please contact the office directly; I don't have a phone number to share here."))
-    if _claims_plan_accepted(message):
+    if _claims_plan_accepted(message) and not _insurance_verified_in_network(session):
         # Demo re-run: "We do accept Delta Dental" although the office info says coverage is confirmed by staff.
+        # (Allowed once the simulated eligibility check has actually returned "in network".)
         return ("the office info does not say which insurance plans are accepted; do not claim any plan is accepted.",
                 tools.OFFICE_INFO["insurance"])
     return None, ""
@@ -590,6 +665,50 @@ def _one_request_problem(turn: Turn) -> Optional[str]:
         return ("check 'one_request': only one booking, cancellation or reschedule per message. Tell the patient what "
                 "was done and ask whether they want anything else.")
     return None
+
+
+def _not_registered_problem(session: Session, action: str) -> Optional[str]:
+    """Python rule: a new patient must finish intake (register_patient) before a booking can be requested."""
+    if action != "book_appointment" or tools.is_registered(session.conn, session.patient_alias):
+        return None
+    return ("check 'patient_registered': this is a new patient with no record yet. Collect first name, last name, date "
+            "of birth, phone, email and insurance (provider + member ID, or self-pay) in the chat, call register_patient, "
+            "and only then request the booking. Tell the patient which details you still need.")
+
+
+_SELF_PAY_WORDS = re.compile(r"self[\s-]?pay|no insurance|not insured|uninsured|don'?t have (any )?insurance|cash|none", re.I)
+
+
+def _invented_details_problem(session: Session, arg: dict) -> Optional[str]:
+    """Python rule: every registration detail must come from the patient's own messages, never from the model.
+    (Same idea as 'patient_chose_slot': the model may format a value, not make one up.)"""
+    said = _patient_said(session)
+    low, digits = said.lower(), re.sub(r"\D", "", said)
+    missing = []
+    for f in ("first_name", "last_name"):
+        if arg[f].strip().lower() not in low:
+            missing.append(f)
+    if arg["email"].strip().lower() not in low:
+        missing.append("email")
+    phone = re.sub(r"\D", "", arg["phone"])
+    if len(phone) < 7 or phone[-7:] not in digits:
+        missing.append("phone")
+    year = arg["date_of_birth"][:4]
+    if not (year.isdigit() and year in said):   # "April 12 1990" -> 1990-04-12 is fine; an invented year is not
+        missing.append("date_of_birth")
+    plan = arg["insurance_provider"].strip()
+    if plan.lower() in tools.SELF_PAY:
+        if not _SELF_PAY_WORDS.search(said):
+            missing.append("insurance_provider")
+    elif plan.split()[0].lower() not in low:
+        missing.append("insurance_provider")
+    member = (arg.get("insurance_member_id") or "").strip().lower()
+    if member and member not in low.replace(" ", ""):
+        missing.append("insurance_member_id")
+    if not missing:
+        return None
+    return (f"check 'details_from_patient': {', '.join(missing)} did not come from the patient's messages. Never invent "
+            "or guess intake details; ask the patient for them.")
 
 
 def _reject(session: Session, turn: Turn, problem: str, extra: Optional[dict] = None) -> Optional[Turn]:
@@ -646,6 +765,16 @@ def _prepare_gated(session: Session, turn: Turn, action: str, arg: dict) -> tupl
     return None, tools.prepare_reschedule(session.conn, arg["appointment_id"], new_slot, session.patient_alias, arg["reason"])
 
 
+def _staff_card(session: Session) -> dict:
+    """What the staff member sees about the patient next to the request (from the database)."""
+    p = tools.get_profile(session.conn, session.patient_alias) or {}
+    visits = tools.past_visits(session.conn, session.patient_alias, session.today.isoformat())
+    return {"name": f"{p.get('first_name') or ''} {p.get('last_name') or ''}".strip() or None,
+            "date_of_birth": p.get("date_of_birth"), "phone": p.get("phone"), "email": p.get("email"),
+            "insurance": p.get("insurance_provider"), "insurance_status": p.get("insurance_status"),
+            "new_patient": not any(v["status"] == "completed" for v in visits)}
+
+
 def _waiting_text(request: dict) -> str:
     when = f"{request['date']} at {request['time']} with {request['provider']}"
     if request.get("action") == "cancel":
@@ -659,8 +788,11 @@ def _waiting_text(request: dict) -> str:
 
 def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -> Turn:
     def system():
+        if turn.patient_context is None:   # from the database; reloaded after the record changes
+            turn.patient_context = tools.patient_context(session.conn, session.patient_alias, session.today.isoformat())
         return {"role": "system", "content": build_system_prompt(session.today, session.patient_alias,
-                                                                 session.prompt_variant, agent=turn.agent)}
+                                                                 session.prompt_variant, agent=turn.agent,
+                                                                 patient_context=turn.patient_context)}
 
     while sum(1 for s in turn.steps if s["kind"] == "MODEL_PROPOSED") < config.MAX_STEPS:
         # 1. Model proposes
@@ -765,7 +897,8 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
                 return _stop(session, turn, "declined",
                              f"I can only book, cancel or move appointments for you ({session.patient_alias}). The other "
                              "person will need to contact the office (or sign in themselves). Can I help with your own appointments?")
-            problem = _one_request_problem(turn) or _book_while_rescheduling_problem(session, turn, action)
+            problem = (_not_registered_problem(session, action) or _one_request_problem(turn)
+                       or _book_while_rescheduling_problem(session, turn, action))
             if problem:
                 stopped = _reject(session, turn, problem)
                 if stopped:
@@ -804,7 +937,8 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
             if not prep["ok"]:
                 obs = prep
             else:
-                request = prep["approval_request"] | {"patient_request": turn.user_message}
+                request = prep["approval_request"] | {"patient_request": turn.user_message,
+                                                      "patient_profile": _staff_card(session)}
                 request_id = tools.create_request(session.conn, session.id, request)   # the staff queue
                 _log(turn, "APPROVAL_REQUESTED", request=request, request_id=request_id)
                 decision = approver(request)
@@ -812,8 +946,26 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
                     session.pending = {"request": request, "turn": turn, "request_id": request_id}
                     return _stop(session, turn, "awaiting_approval", _waiting_text(request))
                 obs = _finish_request(session, turn, request, bool(decision), channel, request_id)
+        elif action in tools.PATIENT_TOOLS:
+            # 3d. The patient's own record. Python injects who the patient is; the model never names a patient.
+            if action == "register_patient":
+                problem = _invented_details_problem(session, arg)
+                if problem:
+                    stopped = _reject(session, turn, problem)
+                    if stopped:
+                        return stopped
+                    continue
+            extra = {"today": session.today.isoformat()} if action in ("get_my_history", "register_patient") else {}
+            try:
+                obs = tools.PATIENT_TOOLS[action](session.conn, patient_alias=session.patient_alias, **arg, **extra)
+            except Exception as e:
+                obs = {"ok": False, "error": f"Tool '{action}' failed: {e}"}
+            if action == "verify_insurance":
+                session.insurance_check = obs if obs.get("ok") else None
+            if action in ("register_patient", "verify_insurance") and obs.get("ok"):
+                turn.patient_context = None          # the record changed: rebuild the prompt's patient section
         else:
-            # 3d. Read-only tool. Python injects who the patient is and what "today" is.
+            # 3e. Read-only tool. Python injects who the patient is and what "today" is.
             if action == "find_next_openings":
                 arg = arg | {"from_date": session.today.isoformat()}
             if action == "list_my_appointments":
@@ -836,8 +988,20 @@ def _loop(session: Session, turn: Turn, llm, approver: Approver, channel: str) -
         session, turn, "Sorry, I couldn't finish that request." + ("" if turn.done_action else " Nothing was changed.")))
 
 
-def choose_agent(session: Session, decision) -> tuple[str, str]:
+_INTAKE_DETAIL = re.compile(r"@|\b555[\s.-]?01\d{2}\b|\b(19|20)\d{2}-\d{2}-\d{2}\b|\bborn\b|\bdate of birth\b|\bdob\b", re.I)
+
+
+def choose_agent(session: Session, decision, message: str = "") -> tuple[str, str]:
     """Front-desk router: which agent handles this message? (decided by the router model, rules as backup)"""
+    if _INTAKE_DETAIL.search(message) and not tools.is_registered(session.conn, session.patient_alias):
+        # Found in a test: intake details mentioning "insurance" were routed to the FAQ agent, which cannot register.
+        return "scheduling", "new-patient intake details"
+    names_pick = message and (any(re.search(rf"\b{w}\b", message.lower()) for w in ORDINALS)
+                              or any(mentions_time(message, o["time"]) for o in session.last_offered))
+    if names_pick and session.last_offered and picked_option(message, session.last_offered, session.today):
+        # Found in the demo run: the reply offered times AND an insurance check; "the first one please" went to the
+        # FAQ agent, which cannot book. Picking one of the offered times is always a scheduling action.
+        return "scheduling", "patient picked an offered time"
     if decision.intent in ("book", "cancel_or_reschedule"):
         return "scheduling", f"intent={decision.intent}"
     if decision.intent == "ask_info":
@@ -889,7 +1053,7 @@ def run_turn(session: Session, user_message: str, llm, decider, approver: Approv
                             {"role": "assistant", "content": json.dumps({"action": "reply", "argument": {"message": FRONT_DESK_REPLIES[routing["reason"]]}})}]
         _stop(session, turn, "front_desk", FRONT_DESK_REPLIES[routing["reason"]])
     else:
-        agent, why = choose_agent(session, decision)
+        agent, why = choose_agent(session, decision, user_message)
         if agent != turn.agent or not any(s["kind"] == "ROUTER" for s in turn.steps):
             _log(turn, "ROUTER", to_agent=agent, reason=why)
         turn.agent = agent

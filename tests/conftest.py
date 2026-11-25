@@ -4,7 +4,11 @@ from datetime import date
 
 import pytest
 
-from backend import config, db, tools
+os.environ.setdefault("INSURANCE_CHECK_DELAY", "0")   # simulated payer delay off in tests (set before config loads)
+os.environ["REMINDERS_ENABLED"] = "0"                  # no background reminder worker inside API tests
+os.environ.pop("SMTP_HOST", None)                      # tests never send real email
+
+from backend import config, db, tools  # noqa: E402
 
 TODAY = date(2026, 11, 20)            # a Friday; first schedule day is Mon 2026-11-23
 BUSY_TUESDAY = "2026-11-24"           # Dr. Rivera's whole morning is pre-booked here

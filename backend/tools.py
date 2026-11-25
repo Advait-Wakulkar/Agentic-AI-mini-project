@@ -9,10 +9,14 @@ booking they only PREPARE a request; a human approves before anything changes,
 and a cancelled appointment is kept (status='cancelled') for the audit trail.
 """
 
+import hashlib
 import json
+import re
+import time
 from datetime import date, datetime
 
-from backend.db import Database, IntegrityError
+from backend import config
+from backend.db import PROFILE_FIELDS, Database, IntegrityError
 
 OFFICE_INFO = {
     "hours": "Bright Smile Dental is open Monday to Friday, 9:00 to 17:00, closed 12:00-13:00 for lunch. Closed weekends.",
@@ -20,7 +24,9 @@ OFFICE_INFO = {
     "services": "Cleanings, check-ups, fillings and emergency visits. Each appointment is 30 minutes.",
     "providers": "Dr. Rivera (general dentistry), Dr. Chen (general dentistry), Dr. Okafor (hygienist, cleanings).",
     "cancellation_policy": "Please cancel at least 24 hours ahead. You can cancel or move appointments here; staff approve every change.",
-    "insurance": "The front desk checks insurance coverage for each patient; the assistant cannot confirm whether a specific plan is accepted. Please call the office with your plan details.",
+    "insurance": "The front desk checks insurance coverage for each patient; the assistant cannot confirm whether a specific plan is accepted. "
+                 "The assistant can run a SIMULATED eligibility check (demo only, no real insurer is contacted) with your plan and member ID; "
+                 "the front desk confirms final coverage.",
     "prices": "Prices depend on the treatment and your insurance. The front desk can give you a quote before your visit.",
 }
 
@@ -333,6 +339,246 @@ def verify_action(conn, request: dict) -> bool:
     if action == "cancel":
         return old_cancelled
     return old_cancelled and verify_booking(conn, request["slot_id"], request["patient_alias"])
+
+
+# ---------------------------------------------------------------------------
+# The patient's profile and history, new-patient intake, and a SIMULATED
+# insurance eligibility check. The harness injects patient_alias, so these only
+# ever read or change the current patient's own record.
+# ---------------------------------------------------------------------------
+
+REQUIRED_PROFILE = ["first_name", "last_name", "date_of_birth", "phone", "email", "insurance_provider"]
+SELF_PAY = {"self-pay", "self pay", "selfpay", "none", "no insurance", "uninsured", "cash"}
+_NAME_RE = re.compile(r"^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ' .-]{0,39}$")
+_FICTIONAL_PHONE = re.compile(r"^(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)?555[\s.-]?01\d{2}$")   # 555-0100..0199
+_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+\.)*(example\.(com|org|net)|[A-Za-z0-9-]+\.test)$", re.I)
+_MEMBER_ID = re.compile(r"^[A-Za-z]{1,4}\d{5,10}$")
+
+
+def get_profile(conn, patient_alias: str) -> dict | None:
+    return conn.one("SELECT alias, " + ", ".join(PROFILE_FIELDS) + ", insurance_status, insurance_checked_at,"
+                    " registered_at FROM patients WHERE alias = ?", (patient_alias,))
+
+
+def is_registered(conn, patient_alias: str) -> bool:
+    p = get_profile(conn, patient_alias)
+    return bool(p and p["registered_at"])
+
+
+def past_visits(conn, patient_alias: str, today: str) -> list[dict]:
+    """Visit history plus any appointments whose date has passed, newest first."""
+    rows = conn.query("SELECT v.date, v.time, p.name AS provider, v.service, v.status, v.note FROM visit_history v"
+                      " JOIN providers p ON p.id = v.provider_id WHERE v.patient_alias = ?", (patient_alias,))
+    rows += [{"date": a["date"], "time": a["time"], "provider": a["provider"], "service": a["reason"],
+              "status": "completed" if a["status"] == "booked" else "cancelled", "note": None}
+             for a in list_appointments(conn, patient_alias, include_cancelled=True) if a["date"] < today]
+    return sorted(rows, key=lambda r: (r["date"], r["time"]), reverse=True)
+
+
+def get_my_history(conn, patient_alias: str, today: str) -> dict:
+    """Everything on file for this patient: profile, upcoming appointments, past visits, cancellations."""
+    profile = get_profile(conn, patient_alias)
+    if profile is None:
+        return {"ok": False, "error": "No patient record."}
+    if not profile["registered_at"]:
+        return {"ok": True, "registered": False, "upcoming": [], "past_visits": [],
+                "note": "New patient: no record yet. Collect the required details and call register_patient."}
+    upcoming = [a for a in list_my_appointments(conn, patient_alias)["appointments"] if a["date"] >= today]
+    cancelled = [{"date": a["date"], "time": a["time"], "provider": a["provider"], "reason": a["reason"]}
+                 for a in list_appointments(conn, patient_alias, include_cancelled=True)
+                 if a["status"] == "cancelled" and a["date"] >= today]
+    visits = past_visits(conn, patient_alias, today)
+    completed = [v for v in visits if v["status"] == "completed"]
+    return {"ok": True, "registered": True,
+            "profile": {k: profile[k] for k in PROFILE_FIELDS} | {"insurance_status": profile["insurance_status"],
+                                                                   "patient_since": profile["registered_at"][:10]},
+            "upcoming": upcoming, "past_visits": visits, "cancelled_upcoming": cancelled,
+            "summary": {"completed_visits": len(completed),
+                        "last_visit": completed[0] if completed else None,
+                        "no_shows": sum(1 for v in visits if v["status"] == "no_show")}}
+
+
+def patient_context(conn, patient_alias: str, today: str) -> str:
+    """A short, factual summary for the agent's system prompt (from the database, not from the model)."""
+    h = get_my_history(conn, patient_alias, today)
+    if not h.get("ok"):
+        return ""
+    if not h["registered"]:
+        return ("NEW PATIENT: no record on file yet. Before you can request a booking you must collect, in the chat: "
+                "first name, last name, date of birth, phone, email, and insurance provider with member ID (or 'self-pay'). "
+                "Ask only for what is still missing, a few details at a time, and never invent or guess a value. "
+                "This is a demo: ask them to use made-up details (phone in the 555-0100 to 555-0199 range, email ending "
+                "in @example.com). When you have everything, call register_patient. They may look at openings first.")
+    p, s = h["profile"], h["summary"]
+    ins = ("self-pay" if (p["insurance_provider"] or "").lower() in SELF_PAY
+           else f"{p['insurance_provider']} (member ID {p['insurance_member_id']}; eligibility {p['insurance_status']})")
+    upcoming = "; ".join(f"#{a['appointment_id']} {a['date']} {a['time']} with {a['provider']} ({a['reason']})"
+                         for a in h["upcoming"]) or "none"
+    last = s["last_visit"]
+    lines = [f"RETURNING PATIENT ON FILE (from the database): {p['first_name']} {p['last_name']}, born {p['date_of_birth']}, "
+             f"phone {p['phone']}, email {p['email']}, patient since {p['patient_since']}.",
+             f"Insurance: {ins}.",
+             f"Upcoming appointments: {upcoming}.",
+             f"Past visits: {s['completed_visits']} completed" + (f", last {last['service']} on {last['date']} with "
+                                                                   f"{last['provider']}" if last else "")
+             + (f", {s['no_shows']} no-show(s)" if s["no_shows"] else "") + ". Use get_my_history for the full list.",
+             "Greet them by first name. Do not ask for details that are already on file."]
+    return "\n".join(lines)
+
+
+def _clean_phone(phone: str) -> str:
+    digits = re.sub(r"\D", "", phone)
+    return f"555-{digits[-4:]}"
+
+
+def register_patient(conn, patient_alias: str, first_name: str, last_name: str, date_of_birth: str, phone: str,
+                     email: str, insurance_provider: str, insurance_member_id: str | None = None, today: str = "") -> dict:
+    """New-patient intake. Python checks every field; nothing is saved unless all of them pass."""
+    profile = get_profile(conn, patient_alias)
+    if profile is None:
+        return {"ok": False, "error": "No patient record."}
+    if profile["registered_at"]:
+        return {"ok": False, "error": "This patient is already registered. Use the details on file."}
+    values = {"first_name": first_name.strip(), "last_name": last_name.strip(), "date_of_birth": date_of_birth.strip(),
+              "phone": phone.strip(), "email": email.strip(), "insurance_provider": insurance_provider.strip(),
+              "insurance_member_id": (insurance_member_id or "").strip() or None}
+    problems = {}
+    for f in ("first_name", "last_name"):
+        if not _NAME_RE.match(values[f]):
+            problems[f] = "letters only (a made-up name is fine)"
+    try:
+        dob = date.fromisoformat(values["date_of_birth"])
+        age = (date.fromisoformat(today) - dob).days / 365.25 if today else 30
+        if not 0 <= age <= 120:
+            problems["date_of_birth"] = "must be a real date in the past (age 0-120)"
+    except ValueError:
+        problems["date_of_birth"] = "use YYYY-MM-DD, a real calendar date"
+    # Fictional data only, except contact details the project owner allowlisted in .env for a live test.
+    allowed = config.REAL_CONTACT_ALLOWLIST
+    phone_ok = _FICTIONAL_PHONE.match(values["phone"]) or re.sub(r"\D", "", values["phone"])[-10:] in {
+        re.sub(r"\D", "", a)[-10:] for a in allowed if re.sub(r"\D", "", a)}
+    if not phone_ok:
+        problems["phone"] = "demo only: use a fictional number from 555-0100 to 555-0199"
+    if not (_EMAIL_RE.match(values["email"]) or values["email"].lower() in allowed):
+        problems["email"] = "demo only: use a made-up address ending in @example.com"
+    self_pay = values["insurance_provider"].lower() in SELF_PAY
+    if not values["insurance_provider"]:
+        problems["insurance_provider"] = "give the insurance company, or 'self-pay'"
+    elif not self_pay and not (values["insurance_member_id"] and _MEMBER_ID.match(values["insurance_member_id"])):
+        problems["insurance_member_id"] = "needed for insured patients: letters then digits, e.g. DD1234567 (made up)"
+    if problems:
+        return {"ok": False, "saved": False, "invalid_fields": problems,
+                "next_step": "Nothing was saved. Ask the patient to correct these fields, then call register_patient again."}
+    if self_pay:
+        values["insurance_provider"], values["insurance_member_id"] = "self-pay", None
+    if _FICTIONAL_PHONE.match(values["phone"]):
+        values["phone"] = _clean_phone(values["phone"])   # (an allowlisted real number is kept as typed)
+    conn.run("UPDATE patients SET first_name = ?, last_name = ?, date_of_birth = ?, phone = ?, email = ?,"
+             " insurance_provider = ?, insurance_member_id = ?, insurance_status = ?, registered_at = ?"
+             " WHERE alias = ? AND registered_at IS NULL",
+             (*[values[f] for f in PROFILE_FIELDS], "self_pay" if self_pay else "unverified",
+              datetime.now().isoformat(timespec="seconds"), patient_alias))
+    saved = get_profile(conn, patient_alias)          # re-read: report what the DATABASE holds
+    return {"ok": bool(saved and saved["registered_at"]), "saved": True, "patient": patient_alias,
+            "profile": {k: saved[k] for k in PROFILE_FIELDS},
+            "next_step": "Registered. Offer to verify their insurance (verify_insurance) unless self-pay, then help them book."}
+
+
+# The simulated payer list. Plan names are generic company names; no real insurer is contacted.
+IN_NETWORK = {"delta dental": "Delta Dental", "aetna": "Aetna", "cigna": "Cigna", "metlife": "MetLife",
+              "guardian": "Guardian"}
+OUT_OF_NETWORK = {"humana": "Humana", "united healthcare": "UnitedHealthcare", "unitedhealthcare": "UnitedHealthcare",
+                  "blue cross": "Blue Cross", "bcbs": "Blue Cross"}
+
+
+def verify_insurance(conn, patient_alias: str, insurance_provider: str | None = None,
+                     member_id: str | None = None) -> dict:
+    """SIMULATED dental eligibility check (demo only; no real insurer or clearinghouse is contacted).
+
+    Deterministic rules so demos and tests are repeatable:
+      Delta Dental / Aetna / Cigna / MetLife / Guardian  -> active, in network
+      Humana / UnitedHealthcare / Blue Cross             -> active, out of network
+      any other plan                                     -> payer not found
+      member ID ending in 000                            -> coverage inactive
+      member ID ending in 999                            -> payer timed out (shows a tool failure)
+    """
+    profile = get_profile(conn, patient_alias) or {}
+    provider = (insurance_provider or profile.get("insurance_provider") or "").strip()
+    member = (member_id or profile.get("insurance_member_id") or "").strip().upper()
+    sim = {"simulated": True, "service": "Simulated eligibility check (demo only: no real insurer contacted)"}
+    if not provider:
+        return {"ok": False, **sim, "error": "No insurance provider given or on file. Ask the patient for it (or self-pay)."}
+    if provider.lower() in SELF_PAY:
+        return {"ok": True, **sim, "status": "self_pay", "detail": "Self-pay patient: no eligibility check needed."}
+    if not _MEMBER_ID.match(member):
+        return {"ok": False, **sim, "error": "A member ID is needed (letters then digits, e.g. DD1234567)."}
+    time.sleep(config.INSURANCE_CHECK_DELAY)            # stands in for the round trip to a payer
+    ref = "ELG-" + hashlib.sha1(f"{provider}|{member}".encode()).hexdigest()[:8].upper()
+    steps = [f"Sent eligibility request (X12 270) for {provider}, member {member}, to the simulated clearinghouse",
+             "Received eligibility response (X12 271)"]
+    key = provider.lower()
+    if member.endswith("999"):
+        return {"ok": False, **sim, "status": "payer_timeout", "steps": steps[:1] + ["No response from payer (timeout)"],
+                "error": "The (simulated) payer did not respond. The front desk will verify coverage manually."}
+    if key in IN_NETWORK or key in OUT_OF_NETWORK:
+        name = IN_NETWORK.get(key) or OUT_OF_NETWORK[key]
+        if member.endswith("000"):
+            result = {"status": "inactive", "plan": name, "in_network": None,
+                      "detail": "Coverage for this member ID is not active."}
+        else:
+            result = {"status": "active", "plan": name, "in_network": key in IN_NETWORK,
+                      "coverage": ({"preventive (cleanings, check-ups)": "100%", "basic (fillings)": "80%", "major": "50%"}
+                                   if key in IN_NETWORK else {"all services": "out-of-network rates"}),
+                      "detail": "Active coverage." + ("" if key in IN_NETWORK else " The office is out of network for this plan.")}
+    else:
+        result = {"status": "payer_not_found", "plan": provider, "in_network": None,
+                  "detail": "This plan is not in the simulated payer list. The front desk will check it manually."}
+    stored = {"active": "verified_in_network" if result.get("in_network") else "verified_out_of_network",
+              "inactive": "inactive", "payer_not_found": "not_found"}[result["status"]]
+    if profile.get("registered_at"):
+        conn.run("UPDATE patients SET insurance_status = ?, insurance_checked_at = ? WHERE alias = ?",
+                 (stored, datetime.now().isoformat(timespec="seconds"), patient_alias))
+    return {"ok": True, **sim, "member_id": member, "reference": ref, "steps": steps, **result,
+            "note": "Report this result to the patient and say it is a simulated check; the front desk confirms final coverage."}
+
+
+def appointment_for_notice(conn, appointment_id) -> dict | None:
+    """One booked appointment with everything a notice needs."""
+    return conn.one("SELECT a.id, a.patient_alias, s.date, s.start_time AS time, p.name AS provider, a.reason"
+                    " FROM appointments a JOIN slots s ON s.id = a.slot_id JOIN providers p ON p.id = s.provider_id"
+                    " WHERE a.id = ? AND a.status = 'booked'", (int(appointment_id),))
+
+
+def send_calendar_invite(conn, patient_alias: str, appointment_id) -> dict:
+    """Chat tool: email the patient an .ics invite for one of THEIR booked appointments (simulated outbox)."""
+    from backend import notify
+    appt = _own_appointment(conn, appointment_id, patient_alias)
+    if appt is None:
+        return {"ok": False, "error": f"Appointment {appointment_id} is not a booked appointment of this patient. "
+                                      "Use list_my_appointments to see their appointments."}
+    appt = appointment_for_notice(conn, appt["id"])
+    profile = get_profile(conn, patient_alias) or {}
+    name = f"{profile.get('first_name') or ''} {profile.get('last_name') or ''}".strip() or patient_alias
+    ics = notify.make_ics(appt, name, OFFICE_INFO["address"])
+    d = date.fromisoformat(appt["date"])
+    when = f"{d:%A, %B} {d.day} at {appt['time']} with {appt['provider']}"
+    result = notify.deliver(conn, appt, profile, "invite", "email",
+                            f"Hi {profile.get('first_name') or 'there'}, here is your calendar invite for {when}. "
+                            "Open the attached file to add it to your calendar.",
+                            subject=f"Calendar invite: {when}", ics=ics, sent_by="chat")
+    if result.get("ok"):
+        result["note"] = ("Tell the patient the invite was emailed to the address on file (simulated outbox in this "
+                          "demo) and that they can also download it under Messages.")
+    return result
+
+
+# Patient tools: the harness injects patient_alias (and today) so they only touch this patient's record.
+PATIENT_TOOLS = {
+    "get_my_history": get_my_history,
+    "register_patient": register_patient,
+    "verify_insurance": verify_insurance,
+    "send_calendar_invite": send_calendar_invite,
+}
 
 
 # Read-only tools the model may call directly, by name.

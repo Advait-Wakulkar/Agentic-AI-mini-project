@@ -14,7 +14,7 @@ import json
 import time
 from datetime import date, datetime
 
-from backend import config, db, tools
+from backend import config, db, notify, reminders, tools
 from backend.agent import Session, run_turn
 from backend.decision import get_decider
 from backend.llm import get_provider
@@ -29,6 +29,20 @@ WORKFLOW = [
     "the first one is fine",
     "oh and do you guys take Delta Dental?",
     "actually forget it, I'll sort my insurance out first. please cancel the whole thing",
+]
+
+RETURNING = [   # Test Patient A has a seeded profile and visit history
+    "hey it's been a while, when was I last in and am I due for a cleaning?",
+    "can you check my insurance is still good?",
+    "what's the phone number you have on file for me?",
+]
+
+NEW_PATIENT = [  # a fresh, unregistered patient
+    "hi! I just moved to the area and need a cleaning, never been to you guys before",
+    "sure, I'm Jordan Testcase, born march 3rd 1994. my cell is 617-867-5309 and email jordan.t@gmail.com. "
+    "I've got Delta Dental, member id DD4400123. any morning next week is fine",
+    "oh right, it's a demo. use 555-0142 and jordan@example.com then",
+    "the first one please",
 ]
 
 TRICKY = [
@@ -127,6 +141,41 @@ def main():
         print("Workflow:")
         wf = run_conversation("Part 1: one natural-language workflow (book → reschedule → FAQ → cancel)",
                               WORKFLOW, Session(conn=conn, patient_alias=PATIENT, today=TODAY), llm, decider, approve_all, log)
+        print("Returning patient:")
+        db.reset_to_seed(conn)
+        ret = run_conversation("Part 2: returning patient (record, history, simulated insurance check)", RETURNING,
+                               Session(conn=conn, patient_alias=PATIENT, today=TODAY), llm, decider, approve_all, log)
+        print("New patient:")
+        db.reset_to_seed(conn)
+        new_alias = db.create_new_patient(conn)
+        new = run_conversation(f"Part 3: new patient intake ({new_alias}) then booking", NEW_PATIENT,
+                               Session(conn=conn, patient_alias=new_alias, today=TODAY), llm, decider, approve_all, log)
+        profile = tools.get_profile(conn, new_alias)
+        log.append(f"_DB patient record for {new_alias}: " + (f"registered {profile['first_name']} {profile['last_name']}, "
+                   f"{profile['phone']}, {profile['email']}, {profile['insurance_provider']} "
+                   f"({profile['insurance_status']})_" if profile and profile["registered_at"] else "not registered_"))
+        # Part 4: the background reminder agent (no chat message involved) notifies the new patient.
+        print("Reminder agent:")
+        rem = reminders.run_once(conn, llm, datetime.combine(TODAY, datetime.min.time()).replace(hour=10))
+        log.append("\n## Part 4: background reminder agent (runs on its own, no chat message)\n")
+        log.append(f"- jobs found by Python: {rem['jobs']}, template fallbacks: {rem['fallbacks']}")
+        for r in rem["results"]:
+            log.append(f"\n### Job: {r['kind']} for {r['patient']}, {r['when']}")
+            for st in r["steps"]:
+                if st["kind"] == "MODEL_PROPOSED":
+                    log.append(f"- [reminders] **MODEL PROPOSED** `{json.dumps(st['proposal']) if st['proposal'] else st['raw'][:200]}`")
+                elif st["kind"] == "VALIDATION":
+                    log.append("- [reminders] VALIDATION: passed" if st["passed"] else f"- [reminders] **REJECTED BY PYTHON**: {'; '.join(st['errors'])}")
+                elif st["kind"] == "TOOL_OBSERVATION":
+                    log.append(f"- [reminders] OBSERVATION: `{json.dumps(st['observation'])[:300]}`")
+                else:
+                    log.append(f"- [reminders] {st['kind']}: {json.dumps({k: v for k, v in st.items() if k != 'kind'})[:200]}")
+            log.append(f"- sent: {r['sent']}")
+        for n in notify.list_notifications(conn):
+            log.append(f"\n> **{n['channel'].upper()} to {n['to_address']} ({n['status']}, {n['sent_by']})"
+                       + (" + calendar invite" if n["has_invite"] else "") + f":** {(n['subject'] + ' | ') if n['subject'] else ''}"
+                       + n["body"].replace(chr(10), " "))
+        print(f"  jobs={rem['jobs']} fallbacks={rem['fallbacks']} sent={[r['sent'] for r in rem['results']]}")
         print("Tricky cases:")
         tricky = []
         for label, msg in TRICKY:  # each in a fresh conversation, so one case cannot affect the next
@@ -139,7 +188,7 @@ def main():
         out = config.EVIDENCE_DIR / f"demo_{stamp}.md"
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(log))
-        (config.EVIDENCE_DIR / f"demo_{stamp}.json").write_text(json.dumps({"workflow": wf, "tricky": tricky}, indent=2, default=str))
+        (config.EVIDENCE_DIR / f"demo_{stamp}.json").write_text(json.dumps({"workflow": wf, "returning": ret, "new_patient": new, "reminders": [{k: v for k, v in r.items() if k != "steps"} for r in rem["results"]], "tricky": tricky}, indent=2, default=str))
         print(f"\nLog: {out}")
     finally:
         try:

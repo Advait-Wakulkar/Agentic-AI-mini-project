@@ -1,0 +1,130 @@
+{
+  "session": "1c433212",
+  "timestamp": "2026-11-24T14:40:35",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient 1ACB",
+  "user_message": "sure, I'm Jordan Testcase, born march 3rd 1994. my cell is 617-867-5309 and email jordan.t@gmail.com. I've got Delta Dental, member id DD4400123. any morning next week is fine",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "new-patient intake details"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\\n\\nThe phone number and email you gave don't match our demo format, so please send made-up details instead:\\n- Phone: a number in the 555-0100 to 555-0199 range (for example, 555-0142)\\n- Email: an address ending in @example.com (for example, jordan.test@example.com)\\n\\nOnce I have those, I'll register you and check next week's morning openings for a cleaning.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\n\nThe phone number and email you gave don't match our demo format, so please send made-up details instead:\n- Phone: a number in the 555-0100 to 555-0199 range (for example, 555-0142)\n- Email: an address ending in @example.com (for example, jordan.test@example.com)\n\nOnce I have those, I'll register you and check next week's morning openings for a cleaning."
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": false,
+      "observation": {
+        "ok": false,
+        "rejected": true,
+        "errors": [
+          "check 'grounded_reply': your reply gives a phone number (555-0142) that is not in the office info; never invent contact details. Rewrite the reply."
+        ]
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\\n\\nThe phone number and email you gave don't match our demo format. Please send made-up details instead:\\n- Phone: a number in the 555-0100 to 555-0199 range\\n- Email: an address ending in @example.com\\n\\nOnce I have those, I'll register you and check next week's morning openings for a cleaning.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\n\nThe phone number and email you gave don't match our demo format. Please send made-up details instead:\n- Phone: a number in the 555-0100 to 555-0199 range\n- Email: an address ending in @example.com\n\nOnce I have those, I'll register you and check next week's morning openings for a cleaning."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\n\nThe phone number and email you gave don't match our demo format. Please send made-up details instead:\n- Phone: a number in the 555-0100 to 555-0199 range\n- Email: an address ending in @example.com\n\nOnce I have those, I'll register you and check next week's morning openings for a cleaning."
+    }
+  ],
+  "final_reply": "Thanks, Jordan! I have your name, date of birth (March 3, 1994), and insurance (Delta Dental, member ID DD4400123).\n\nThe phone number and email you gave don't match our demo format. Please send made-up details instead:\n- Phone: a number in the 555-0100 to 555-0199 range\n- Email: an address ending in @example.com\n\nOnce I have those, I'll register you and check next week's morning openings for a cleaning.",
+  "stop_reason": "replied",
+  "seconds": 6.58,
+  "db_appointments_for_patient": []
+}

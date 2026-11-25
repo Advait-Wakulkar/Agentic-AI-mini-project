@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import ApprovalCard from "@/components/ApprovalCard";
 import Login from "@/components/Login";
 import { useAuth } from "@/components/useAuth";
-import { api, prettyDate, type HistoryRow, type StaffRequest } from "@/lib/api";
+import { api, prettyDate, type HistoryRow, type ReminderStatus, type StaffRequest } from "@/lib/api";
 
 const OUTCOME_CLS = (o: string | null, decision: string) =>
   decision === "denied" ? "text-muted" : o === "verified" ? "text-good" : "text-bad";
@@ -17,13 +17,16 @@ export default function StaffPage() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [rem, setRem] = useState<ReminderStatus | null>(null);
+  const [running, setRunning] = useState(false);
   const allowed = auth.ready && auth.signedIn && auth.me?.is_staff;
 
   const refresh = useCallback(async () => {
     try {
-      const [q, h] = await Promise.all([api.staffRequests("pending"), api.history()]);
+      const [q, h, r] = await Promise.all([api.staffRequests("pending"), api.history(), api.reminderStatus()]);
       setQueue(q);
       setHistory(h);
+      setRem(r);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -48,6 +51,20 @@ export default function StaffPage() {
       setError((e as Error).message);
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function runReminders() {
+    setRunning(true);
+    setNotice(null);
+    try {
+      const r = await api.runReminders();
+      setNotice(`Reminder agent ran: ${r.jobs} job(s)${r.fallbacks ? `, ${r.fallbacks} used the template fallback` : ""}.`);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -91,6 +108,44 @@ export default function StaffPage() {
           ))}
         </div>
       )}
+
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-semibold">Reminder agent</h2>
+        <span className="text-xs text-muted">
+          {rem?.enabled ? `runs in the background every ${rem.interval_seconds}s` : "background worker off"} · reminders {rem?.window_hours ?? 48}h ahead ·
+          email {rem?.smtp ? "via SMTP" : "simulated outbox"} · SMS simulated
+          {rem?.last_run ? ` · last run ${rem.last_run.slice(11, 19)}` : ""}
+        </span>
+        <button onClick={runReminders} disabled={running}
+          className="ml-auto rounded border border-line bg-panel px-2 py-1 text-xs hover:bg-panel-2 disabled:opacity-50">
+          {running ? "Running…" : "Run now"}
+        </button>
+      </div>
+      {rem?.last_error && <p className="mb-2 text-xs text-bad">Last background error: {rem.last_error}</p>}
+      <div className="mb-6 max-h-72 overflow-auto rounded-xl border border-line bg-panel">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-panel-2 text-left text-muted">
+            <tr>{["Sent", "Patient", "Kind", "Channel", "To", "Message", "Status", "By"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {(rem?.notifications.length ?? 0) === 0 && (
+              <tr><td colSpan={8} className="px-3 py-4 text-center text-muted">Nothing sent yet.</td></tr>
+            )}
+            {rem?.notifications.map((n) => (
+              <tr key={n.id} className="border-t border-line align-top">
+                <td className="px-3 py-1.5">{n.created_at.replace("T", " ").slice(5, 16)}</td>
+                <td className="px-3 py-1.5">{n.patient_alias}</td>
+                <td className="px-3 py-1.5 capitalize">{n.kind}</td>
+                <td className="px-3 py-1.5">{n.channel}{n.has_invite ? " + .ics" : ""}</td>
+                <td className="px-3 py-1.5 font-mono">{n.to_address}</td>
+                <td className="max-w-xs truncate px-3 py-1.5" title={n.body}>{n.subject ?? n.body}</td>
+                <td className="px-3 py-1.5">{n.status}</td>
+                <td className="px-3 py-1.5 font-mono">{n.sent_by}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h2 className="mb-2 text-sm font-semibold">History (audit log)</h2>
       <div className="overflow-x-auto rounded-xl border border-line bg-panel">

@@ -16,10 +16,10 @@ With SUPABASE_URL + SUPABASE_ANON_KEY set, everyone signs in with Supabase Auth
 import threading
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
-from backend import auth, config, db, tools
+from backend import auth, config, db, notify, reminders, tools
 from backend.agent import Session, resume_turn, run_turn
 from backend.decision import get_decider
 from backend.llm import PROVIDERS, LLMError, get_provider, provider_status
@@ -65,9 +65,12 @@ def _patient_for(user, requested: str | None = None) -> str:
     if user is not None:
         return auth.ensure_patient(_conn(), user)
     patient = requested or db.PATIENTS[0]
-    if patient not in db.PATIENTS:
-        raise HTTPException(400, f"Patient must be one of {db.PATIENTS} (fictional aliases only).")
-    return patient
+    if patient in db.PATIENTS:
+        return patient
+    # A demo "New patient" created by /api/session (fictional alias like 'New Patient 3F9A').
+    if patient.startswith(db.NEW_PATIENT_PREFIX) and _conn().one("SELECT 1 AS ok FROM patients WHERE alias = ?", (patient,)):
+        return patient
+    raise HTTPException(400, f"Patient must be one of {db.PATIENTS} or a demo new patient (fictional aliases only).")
 
 
 def _session(session_id: str, user) -> Session:
@@ -166,7 +169,11 @@ def set_model(body: ModelIn, _staff=Depends(_require_staff)):
 
 @app.post("/api/session")
 def new_session(body: NewSession, user=Depends(auth.current_user)):
-    s = Session(conn=_conn(), patient_alias=_patient_for(user, body.patient), prompt_variant=body.variant,
+    if body.patient == "new" and user is None:
+        alias = db.create_new_patient(_conn())          # demo intake: an empty, unregistered record
+    else:
+        alias = _patient_for(user, body.patient)
+    s = Session(conn=_conn(), patient_alias=alias, prompt_variant=body.variant,
                 owner_id=user["id"] if user else None)
     _state["sessions"][s.id] = s
     return {"session_id": s.id, "patient": s.patient_alias, "today": s.today.isoformat()}
@@ -194,6 +201,12 @@ def session_events(session_id: str, user=Depends(auth.current_user)):
 @app.get("/api/appointments")
 def appointments(patient: str | None = None, user=Depends(auth.current_user)):
     return tools.list_appointments(_conn(), _patient_for(user, patient))
+
+
+@app.get("/api/history")
+def history(patient: str | None = None, user=Depends(auth.current_user)):
+    """The patient's own record: profile, upcoming and past visits (the same data the agent sees)."""
+    return tools.get_my_history(_conn(), _patient_for(user, patient), config.today().isoformat())
 
 
 @app.get("/api/schedule")
@@ -264,6 +277,60 @@ def staff_history(limit: int = 100, staff=Depends(_require_staff)):
         " FROM approvals a LEFT JOIN slots s ON s.id = a.slot_id LEFT JOIN providers p ON p.id = s.provider_id"
         " LEFT JOIN approval_requests r ON r.approval_id = a.id"
         " WHERE a.decided_by <> 'seed' ORDER BY a.id DESC LIMIT ?", (min(limit, 500),))
+
+
+# ---------------------------------------------------------------------------
+# Reminder agent (background) and the messages it sends
+# ---------------------------------------------------------------------------
+
+@app.on_event("startup")
+def _start_reminder_agent():
+    if not config.REMINDERS_ENABLED or not config.DATABASE_URL:
+        return
+    _conn()                                    # make sure the schema exists before the worker queries it
+    worker = reminders.ReminderWorker()
+    worker.start()
+    _state["reminders"] = worker
+
+
+@app.on_event("shutdown")
+def _stop_reminder_agent():
+    if _state.get("reminders"):
+        _state["reminders"].stop()
+
+
+@app.get("/api/notifications")
+def patient_notifications(patient: str | None = None, user=Depends(auth.current_user)):
+    """The patient's own messages (confirmations, reminders, invites)."""
+    return notify.list_notifications(_conn(), _patient_for(user, patient), limit=50)
+
+
+@app.get("/api/notifications/{notification_id}/invite.ics")
+def invite_file(notification_id: int, patient: str | None = None, user=Depends(auth.current_user)):
+    row = notify.get_notification(_conn(), notification_id)
+    if row is None or row["patient_alias"] != _patient_for(user, patient) or not row["ics"]:
+        raise HTTPException(404, "No calendar invite here.")
+    return Response(row["ics"], media_type="text/calendar",
+                    headers={"Content-Disposition": f'attachment; filename="appointment-{row["appointment_id"]}.ics"'})
+
+
+@app.get("/api/staff/notifications")
+def staff_notifications(limit: int = 100, _staff=Depends(_require_staff)):
+    worker = _state.get("reminders")
+    return {"enabled": bool(worker), "interval_seconds": config.REMINDER_INTERVAL_SECONDS,
+            "window_hours": config.REMINDER_WINDOW_HOURS, "smtp": bool(config.SMTP_HOST),
+            "last_run": (worker.last_summary or {}).get("ran_at") if worker else None,
+            "last_error": worker.last_error if worker else None,
+            "notifications": notify.list_notifications(_conn(), limit=min(limit, 500))}
+
+
+@app.post("/api/staff/reminders/run")
+def run_reminders_now(_staff=Depends(_require_staff)):
+    """Staff 'Run now': one pass of the reminder agent (same code the background worker runs)."""
+    with _lock:
+        summary = reminders.run_once(_conn(), _llm())
+    return {k: v for k, v in summary.items() if k != "results"} | {
+        "results": [{k: v for k, v in r.items() if k != "steps"} for r in summary["results"]]}
 
 
 @app.post("/api/reset")

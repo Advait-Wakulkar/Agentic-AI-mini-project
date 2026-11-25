@@ -1,0 +1,191 @@
+{
+  "session": "3d0adeaf",
+  "timestamp": "2026-11-24T14:44:18",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient B",
+  "user_message": "ugh I think I totally forgot my last cleaning, sorry \ud83d\ude05 can I rebook it for friday afternoon?",
+  "decision": {
+    "intent": "cancel_or_reschedule",
+    "intent_probs": {
+      "book": 0.033,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.9,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "cancel_or_reschedule",
+        "intent_probs": {
+          "book": 0.033,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.9,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=cancel_or_reschedule"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_openings\", \"argument\": {\"date\": \"2026-11-27\", \"part_of_day\": \"afternoon\"}}",
+      "proposal": {
+        "action": "list_openings",
+        "argument": {
+          "date": "2026-11-27",
+          "part_of_day": "afternoon"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_openings",
+      "observation": {
+        "ok": true,
+        "date": "2026-11-27",
+        "openings": [
+          {
+            "slot_id": "S-20261127-1300-P2",
+            "time": "13:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1300-P3",
+            "time": "13:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1330-P1",
+            "time": "13:30",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-1330-P2",
+            "time": "13:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1400-P1",
+            "time": "14:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-1400-P3",
+            "time": "14:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1430-P1",
+            "time": "14:30",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-1430-P2",
+            "time": "14:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1430-P3",
+            "time": "14:30",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1500-P2",
+            "time": "15:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1500-P3",
+            "time": "15:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1530-P1",
+            "time": "15:30",
+            "provider": "Dr. Rivera"
+          }
+        ],
+        "total_open": 19
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"No problem at all, Blake! Friday afternoon has several openings for a 30-minute cleaning on 2026-11-27:\\n\\n- 13:00 with Dr. Chen\\n- 14:00 with Dr. Rivera\\n- 15:30 with Dr. Rivera\\n\\nWould you like one of these? If you'd like Dr. Chen, who saw you at your last check-up, 13:30 and 15:00 are also open with Dr. Chen. Let me know which time you prefer and I'll send the booking request to the front desk for approval.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "No problem at all, Blake! Friday afternoon has several openings for a 30-minute cleaning on 2026-11-27:\n\n- 13:00 with Dr. Chen\n- 14:00 with Dr. Rivera\n- 15:30 with Dr. Rivera\n\nWould you like one of these? If you'd like Dr. Chen, who saw you at your last check-up, 13:30 and 15:00 are also open with Dr. Chen. Let me know which time you prefer and I'll send the booking request to the front desk for approval."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "No problem at all, Blake! Friday afternoon has several openings for a 30-minute cleaning on 2026-11-27:\n\n- 13:00 with Dr. Chen\n- 14:00 with Dr. Rivera\n- 15:30 with Dr. Rivera\n\nWould you like one of these? If you'd like Dr. Chen, who saw you at your last check-up, 13:30 and 15:00 are also open with Dr. Chen. Let me know which time you prefer and I'll send the booking request to the front desk for approval."
+    }
+  ],
+  "final_reply": "No problem at all, Blake! Friday afternoon has several openings for a 30-minute cleaning on 2026-11-27:\n\n- 13:00 with Dr. Chen\n- 14:00 with Dr. Rivera\n- 15:30 with Dr. Rivera\n\nWould you like one of these? If you'd like Dr. Chen, who saw you at your last check-up, 13:30 and 15:00 are also open with Dr. Chen. Let me know which time you prefer and I'll send the booking request to the front desk for approval.",
+  "stop_reason": "replied",
+  "seconds": 7.46,
+  "db_appointments_for_patient": []
+}

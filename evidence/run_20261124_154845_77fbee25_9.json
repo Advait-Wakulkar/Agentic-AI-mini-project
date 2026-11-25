@@ -1,0 +1,145 @@
+{
+  "session": "77fbee25",
+  "timestamp": "2026-11-24T15:48:44",
+  "llm": "ollama:qwen3:4b",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "faq",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient A",
+  "user_message": "Can you check my insurance?",
+  "decision": {
+    "intent": "ask_info",
+    "intent_probs": {
+      "book": 0.033,
+      "ask_info": 0.9,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "ask_info",
+        "intent_probs": {
+          "book": 0.033,
+          "ask_info": 0.9,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "faq",
+      "reason": "intent=ask_info"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\n  \"action\": \"verify_insurance\",\n  \"argument\": {\n    \"insurance_provider\": \"Delta Dental\",\n    \"member_id\": \"DD1048275\"\n  }\n}",
+      "proposal": {
+        "action": "verify_insurance",
+        "argument": {
+          "insurance_provider": "Delta Dental",
+          "member_id": "DD1048275"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "faq",
+      "action": "verify_insurance",
+      "observation": {
+        "ok": true,
+        "simulated": true,
+        "service": "Simulated eligibility check (demo only: no real insurer contacted)",
+        "member_id": "DD1048275",
+        "reference": "ELG-F7CC6A21",
+        "steps": [
+          "Sent eligibility request (X12 270) for Delta Dental, member DD1048275, to the simulated clearinghouse",
+          "Received eligibility response (X12 271)"
+        ],
+        "status": "active",
+        "plan": "Delta Dental",
+        "in_network": true,
+        "coverage": {
+          "preventive (cleanings, check-ups)": "100%",
+          "basic (fillings)": "80%",
+          "major": "50%"
+        },
+        "detail": "Active coverage.",
+        "note": "Report this result to the patient and say it is a simulated check; the front desk confirms final coverage."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\n  \"action\": \"reply\",\n  \"argument\": {\n    \"message\": \"Your Delta Dental insurance (member ID DD1048275) is active and in-network. Coverage details: Preventive care (cleanings and check-ups) is 100%, basic procedures like fillings are 80%, and major procedures are 50%. This is a simulated eligibility check (demo only). The front desk confirms final coverage. Let me know if you need help with anything else!\"\n  }\n}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Your Delta Dental insurance (member ID DD1048275) is active and in-network. Coverage details: Preventive care (cleanings and check-ups) is 100%, basic procedures like fillings are 80%, and major procedures are 50%. This is a simulated eligibility check (demo only). The front desk confirms final coverage. Let me know if you need help with anything else!"
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "faq",
+      "passed": true
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "faq",
+      "stop_reason": "replied",
+      "reply": "Your Delta Dental insurance (member ID DD1048275) is active and in-network. Coverage details: Preventive care (cleanings and check-ups) is 100%, basic procedures like fillings are 80%, and major procedures are 50%. This is a simulated eligibility check (demo only). The front desk confirms final coverage. Let me know if you need help with anything else!"
+    }
+  ],
+  "final_reply": "Your Delta Dental insurance (member ID DD1048275) is active and in-network. Coverage details: Preventive care (cleanings and check-ups) is 100%, basic procedures like fillings are 80%, and major procedures are 50%. This is a simulated eligibility check (demo only). The front desk confirms final coverage. Let me know if you need help with anything else!",
+  "stop_reason": "replied",
+  "seconds": 21.03,
+  "db_appointments_for_patient": []
+}

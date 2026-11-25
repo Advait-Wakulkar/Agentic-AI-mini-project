@@ -73,8 +73,29 @@ function StepBody({ s }: { s: Step }) {
           ))}
         </ul>
       );
-    case "TOOL_OBSERVATION":
+    case "TOOL_OBSERVATION": {
+      const o = s.observation as Record<string, unknown> | undefined;
+      if (o && o.simulated) {
+        // The simulated insurance check: show what the tool "did", then the raw result.
+        return (
+          <div className="mt-1 text-xs">
+            <div className="text-muted">{String(o.service)}</div>
+            <ol className="mt-1 list-decimal pl-4">
+              {((o.steps as string[]) ?? []).map((st) => <li key={st}>{st}</li>)}
+            </ol>
+            <div className="mt-1">
+              Result: <b>{String(o.status ?? (o.ok ? "ok" : "error"))}</b>
+              {o.plan ? <> · {String(o.plan)}</> : null}
+              {o.in_network === true && <> · in network</>}
+              {o.in_network === false && <> · out of network</>}
+              {o.reference ? <span className="text-muted"> · ref {String(o.reference)}</span> : null}
+            </div>
+            <Json value={o} />
+          </div>
+        );
+      }
       return <Json value={s.observation} />;
+    }
     case "APPROVAL_REQUESTED": {
       const r = s.request as Record<string, string>;
       return (

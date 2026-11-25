@@ -57,6 +57,48 @@ ACTIONS = {
         "description": "Request to move one of the patient's appointments to new_date (YYYY-MM-DD) at new_time (HH:MM). "
                        "A human must approve.",
     },
+    "get_my_history": {
+        "required": {},
+        "optional": {},
+        "description": "Everything on file for the current patient: profile, insurance, upcoming appointments, past visits "
+                       "(completed, cancelled, no-shows).",
+    },
+    "register_patient": {
+        "required": {"first_name": str, "last_name": str, "date_of_birth": str, "phone": str, "email": str,
+                     "insurance_provider": str},
+        "optional": {"insurance_member_id": str},
+        "description": "NEW patients only: save the details the patient gave in the chat. date_of_birth YYYY-MM-DD; "
+                       "insurance_provider is a plan name or 'self-pay' (member ID needed unless self-pay). "
+                       "Use only values the patient actually gave.",
+    },
+    "verify_insurance": {
+        "required": {},
+        "optional": {"insurance_provider": str, "member_id": str},
+        "description": "Run a SIMULATED insurance eligibility check (demo; no real insurer). Without arguments it checks "
+                       "the plan on file.",
+    },
+    "send_calendar_invite": {
+        "required": {"appointment_id": (int, str)},
+        "optional": {},
+        "description": "Email the patient a calendar invite (.ics) for one of their booked appointments "
+                       "(appointment_id from list_my_appointments). Email is a simulated outbox in this demo.",
+    },
+    # Reminder agent only. Python fills in the recipient from the patient record; the model never chooses it.
+    "send_email": {
+        "required": {"subject": str, "message": str},
+        "optional": {},
+        "description": "Email the patient (the calendar invite is attached automatically).",
+    },
+    "send_sms": {
+        "required": {"message": str},
+        "optional": {},
+        "description": "Text the patient a short message (under 300 characters).",
+    },
+    "finish": {
+        "required": {},
+        "optional": {},
+        "description": "End this job once the patient has been notified.",
+    },
     "transfer": {
         "required": {"to": str},
         "optional": {},
@@ -72,9 +114,12 @@ ACTIONS = {
 # Each agent may only use its own tools (least privilege). The validator enforces this.
 AGENT_ACTIONS = {
     "scheduling": ["list_openings", "find_next_openings", "check_availability", "list_my_appointments",
+                   "get_my_history", "register_patient", "verify_insurance", "send_calendar_invite",
                    "book_appointment", "cancel_appointment", "reschedule_appointment", "transfer", "reply"],
-    "faq": ["get_office_info", "transfer", "reply"],
+    "faq": ["get_office_info", "get_my_history", "verify_insurance", "transfer", "reply"],
+    "reminders": ["send_email", "send_sms", "finish"],   # background agent: no chat, no schedule changes
 }
+CHAT_AGENTS = ("scheduling", "faq")   # the agents a chat can be transferred to
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -167,8 +212,12 @@ def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -
             errors.append("check 'reason_nonempty': give a short visit reason, e.g. 'cleaning'.")
     if "appointment_id" in arg and not str(arg["appointment_id"]).strip().isdigit():
         errors.append("check 'appointment_id': use the numeric appointment_id from list_my_appointments.")
-    if action == "transfer" and arg["to"] not in AGENT_ACTIONS:
-        errors.append(f"check 'transfer_target': 'to' must be one of {', '.join(AGENT_ACTIONS)}.")
-    if action == "reply" and not arg["message"].strip():
-        errors.append("check 'message_nonempty': the reply message is empty.")
+    if action == "transfer" and arg["to"] not in CHAT_AGENTS:
+        errors.append(f"check 'transfer_target': 'to' must be one of {', '.join(CHAT_AGENTS)}.")
+    if action in ("reply", "send_email", "send_sms") and not arg["message"].strip():
+        errors.append("check 'message_nonempty': the message is empty.")
+    if action == "send_sms" and len(arg["message"]) > 300:
+        errors.append("check 'sms_length': keep the text under 300 characters.")
+    if action == "send_email" and not arg["subject"].strip():
+        errors.append("check 'subject_nonempty': give the email a short subject.")
     return errors

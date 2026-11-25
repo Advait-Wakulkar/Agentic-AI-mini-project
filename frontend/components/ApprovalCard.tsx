@@ -38,6 +38,25 @@ export default function ApprovalCard({
         <dd className="font-medium">{when(request.date, request.time)} · {request.provider}</dd>
         <dt className="text-muted">Reason</dt>
         <dd>{request.reason}</dd>
+        {request.patient_profile && (
+          <>
+            <dt className="text-muted">Patient</dt>
+            <dd>
+              {request.patient_profile.name ?? "not registered"}
+              {request.patient_profile.date_of_birth && <span className="text-muted"> · born {request.patient_profile.date_of_birth}</span>}
+              {request.patient_profile.new_patient && (
+                <span className="ml-2 rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent">new patient</span>
+              )}
+            </dd>
+            <dt className="text-muted">Insurance</dt>
+            <dd>
+              {request.patient_profile.insurance ?? "—"}
+              {request.patient_profile.insurance_status && (
+                <span className="text-muted"> · {request.patient_profile.insurance_status.replaceAll("_", " ")}</span>
+              )}
+            </dd>
+          </>
+        )}
       </dl>
       {request.patient_request && (
         <p className="mt-3 rounded-lg bg-panel p-2 text-xs text-muted">

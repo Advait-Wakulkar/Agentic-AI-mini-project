@@ -18,6 +18,53 @@ export type ApprovalRequest = {
   patient_alias: string;
   reason: string;
   patient_request?: string;
+  patient_profile?: {
+    name: string | null;
+    date_of_birth: string | null;
+    phone: string | null;
+    email: string | null;
+    insurance: string | null;
+    insurance_status: string | null;
+    new_patient: boolean;
+  };
+};
+
+export type Notice = {
+  id: number;
+  appointment_id: number;
+  patient_alias: string;
+  kind: "confirmation" | "reminder" | "invite";
+  channel: "email" | "sms";
+  to_address: string;
+  subject: string | null;
+  body: string;
+  has_invite: boolean;
+  status: "simulated" | "sent" | "failed";
+  sent_by: string;
+  created_at: string;
+};
+
+export type ReminderStatus = {
+  enabled: boolean;
+  interval_seconds: number;
+  window_hours: number;
+  smtp: boolean;
+  last_run: string | null;
+  last_error: string | null;
+  notifications: Notice[];
+};
+
+export type Visit ={ date: string; time: string; provider: string; service: string; status: string; note: string | null };
+
+export type PatientHistory = {
+  ok: boolean;
+  registered: boolean;
+  profile?: {
+    first_name: string; last_name: string; date_of_birth: string; phone: string; email: string;
+    insurance_provider: string; insurance_member_id: string | null; insurance_status: string; patient_since: string;
+  };
+  upcoming: { appointment_id: number; date: string; time: string; provider: string; reason: string }[];
+  past_visits: Visit[];
 };
 
 export type TurnResult = {
@@ -133,7 +180,9 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   config: () => call<Config>("/config"),
   newSession: (patient: string) =>
-    call<{ session_id: string }>("/session", { method: "POST", body: JSON.stringify({ patient: patient || null }) }),
+    call<{ session_id: string; patient: string }>("/session", { method: "POST", body: JSON.stringify({ patient: patient || null }) }),
+  patientHistory: (patient?: string) =>
+    call<PatientHistory>(`/history${patient ? `?patient=${encodeURIComponent(patient)}` : ""}`),
   chat: (session_id: string, message: string) =>
     call<TurnResult>("/chat", { method: "POST", body: JSON.stringify({ session_id, message }) }),
   me: () => call<Me>("/me"),
@@ -154,6 +203,14 @@ export const api = {
   setModel: (provider: string, model: string) =>
     call<{ llm: string }>("/model", { method: "POST", body: JSON.stringify({ provider, model }) }),
   reset: () => call<{ ok: boolean }>("/reset", { method: "POST" }),
+  notifications: (patient?: string) =>
+    call<Notice[]>(`/notifications${patient ? `?patient=${encodeURIComponent(patient)}` : ""}`),
+  inviteUrl: (id: number, patient?: string) =>
+    `/api/notifications/${id}/invite.ics${patient ? `?patient=${encodeURIComponent(patient)}` : ""}`,
+  reminderStatus: () => call<ReminderStatus>("/staff/notifications"),
+  runReminders: () =>
+    call<{ jobs: number; fallbacks: number; results: { kind: string; when: string; sent: Record<string, string> }[] }>(
+      "/staff/reminders/run", { method: "POST" }),
 };
 
 export function prettyDate(iso: string, opts: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" }) {

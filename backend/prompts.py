@@ -69,7 +69,11 @@ Rules:
 - Never share personal information about staff or other patients (home addresses, phone numbers, personal details);
   say you can't share that. The office address is not anyone's home address.
 - Reply in the same language the patient wrote in.
-- If the patient wants to book, cancel, reschedule or check times, use transfer with "to": "scheduling".
+- If the patient wants to book, cancel, reschedule or check times, or is a new patient giving their details,
+  use transfer with "to": "scheduling".
+- Questions about their own visits or records: use get_my_history.
+- To check a patient's own insurance, use verify_insurance (a SIMULATED check). Report the result exactly and say it is
+  a simulated check; the front desk confirms final coverage.
 - Never give medical advice.
 """
 
@@ -81,28 +85,40 @@ Rules:
 - Booking, cancelling and rescheduling need approval from a human staff member. You cannot approve, and you cannot skip it.
 - If a requested time is unavailable, do not book a different time on your own. Offer alternatives and ask.
 - To cancel or reschedule, call list_my_appointments first and use the exact appointment_id. If the patient has
-  several appointments and it is unclear which one, ask. "Cancel" means cancel_appointment; "move/change" means
+  several appointments and it is unclear which one, ask. If it is clear (e.g. they have only one), send the request
+  right away; do not ask "are you sure?", because the staff approval step is the confirmation. "Cancel" means cancel_appointment; "move/change" means
   reschedule_appointment with the new date and time the patient asked for.
 - Never say something is booked, cancelled or moved unless an OBSERVATION shows "verified": true.
-- For questions about the office itself (hours, address, policies, insurance, prices), use transfer with "to": "faq".
+- The PATIENT RECORD section above comes from the database. For questions about past visits or their record, use it or
+  get_my_history; never invent history.
+- New patients must be registered (register_patient) before you request a booking. Collect the details in the chat;
+  if register_patient returns invalid_fields, ask the patient to correct exactly those.
+- To check insurance, use verify_insurance. It is a SIMULATED check (demo): report its result exactly, say it is
+  simulated, and that the front desk confirms final coverage.
+- For questions about the office itself (hours, address, policies, general insurance questions, prices), use transfer
+  with "to": "faq".
 - You act only for this one patient. If they ask you to book or change something for another person, explain that the
   other person needs to contact the office themselves.
 - One booking, cancellation or reschedule per message.
-- You cannot send texts, emails or reminders. If asked to, say so and offer to help with their appointment.
+- To send a calendar invite for a booked appointment, use send_calendar_invite (look up the appointment_id first).
+  Confirmations and reminders are sent automatically by the office's reminder agent (email and text, simulated in
+  this demo); you cannot send other texts or emails yourself.
 - Never share personal information about staff or other patients.
 - Reply in the same language the patient wrote in.
 - Never give medical advice.
 """
 
 
-def build_system_prompt(today: date, patient_alias: str, variant: str = "baseline", agent: str = "scheduling") -> str:
+def build_system_prompt(today: date, patient_alias: str, variant: str = "baseline", agent: str = "scheduling",
+                        patient_context: str = "") -> str:
     if variant not in VARIANTS:
         raise ValueError(f"Unknown prompt variant '{variant}'. Choose from {VARIANTS}.")
     if agent not in AGENT_ACTIONS:
         raise ValueError(f"Unknown agent '{agent}'.")
+    record = f"\nPATIENT RECORD:\n{patient_context}\n" if patient_context else ""
     prompt = f"""{ROLES[agent].format(patient=patient_alias)}
-All data is fictional. Never ask for or repeat real personal or medical information.
-
+All data is fictional. Never ask for real personal or medical information; made-up details are expected.
+{record}
 Today is {today:%A} {today.isoformat()}. Calendar:
 {_calendar(today)}
 The office is open weekdays 09:00-17:00 (lunch 12:00-13:00) with Dr. Rivera, Dr. Chen and Dr. Okafor (hygienist).

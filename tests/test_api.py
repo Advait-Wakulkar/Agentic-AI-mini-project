@@ -160,6 +160,11 @@ def test_patients_cannot_use_staff_endpoints(signed_in, client):
 
 def test_signed_in_flow_staff_approves(signed_in, client):
     sid = start(client, list(BOOK_SCRIPT), headers=signed_in("alice"))
+    # A first sign-in creates an empty record: the patient must finish intake before booking (see test_patients.py).
+    alias = api._state["sessions"][sid].patient_alias
+    assert not tools.is_registered(api._state["conn"], alias)
+    tools.register_patient(api._state["conn"], alias, "Alice", "Example", "1992-03-04", "555-0150", "alice@example.com",
+                           "self-pay", today=TODAY.isoformat())
     client.post("/api/chat", json={"session_id": sid, "message": f"Book Dr. Chen {BUSY_TUESDAY} at 9am"}, headers=signed_in("alice"))
     rid = client.get("/api/staff/requests", headers=signed_in("staff")).json()[0]["id"]
     d = client.post(f"/api/staff/requests/{rid}/decide", json={"approved": True}, headers=signed_in("staff")).json()

@@ -7,7 +7,7 @@ import ModelPicker from "@/components/ModelPicker";
 import ScheduleGrid from "@/components/ScheduleGrid";
 import Trace from "@/components/Trace";
 import { useAuth } from "@/components/useAuth";
-import { api, prettyDate, type ApprovalRequest, type Config, type Schedule, type Step, type TurnResult } from "@/lib/api";
+import { api, prettyDate, type ApprovalRequest, type Config, type Notice, type PatientHistory, type Schedule, type Step, type TurnResult } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 
 type Message =
@@ -17,16 +17,102 @@ type Message =
 
 type MyAppointment = { id: number; date: string; time: string; provider: string; reason: string };
 
+const NEW = "new"; // dropdown value: start a demo intake as a brand-new patient
+
 const EXAMPLES = [
   "Book a cleaning with Dr. Chen next Tuesday at 1:30pm",
-  "I'd like Dr. Rivera next Tuesday at 9am",
+  "When was my last cleaning?",
+  "Can you check my insurance?",
   "I need an appointment sometime",
   "What appointments do I have?",
-  "Cancel my appointment",
   "Move my appointment to Wednesday at 10am",
   "What are your hours?",
   "How much ibuprofen should I take?",
 ];
+
+const NEW_EXAMPLES = [
+  "Hi, I'm new here and I'd like to book a cleaning",
+  "I've never been to your office, can I see someone next week?",
+  "What do you need from me to register?",
+];
+
+const INSURANCE_LABEL: Record<string, string> = {
+  unverified: "not checked yet",
+  verified_in_network: "in network (simulated check)",
+  verified_out_of_network: "out of network (simulated check)",
+  inactive: "inactive (simulated check)",
+  not_found: "plan not found (simulated check)",
+  self_pay: "self-pay",
+};
+
+const VISIT_STATUS: Record<string, string> = { completed: "text-good", no_show: "text-bad", cancelled: "text-muted" };
+
+const KIND_LABEL: Record<string, string> = { confirmation: "Confirmation", reminder: "Reminder", invite: "Calendar invite" };
+
+function Messages({ items, patient }: { items: Notice[]; patient?: string }) {
+  if (items.length === 0)
+    return <p className="text-xs text-muted">No messages yet. Confirmations and reminders arrive here automatically from the reminder agent.</p>;
+  return (
+    <ul className="space-y-2 text-xs">
+      {items.map((n) => (
+        <li key={n.id} className="rounded-lg border border-line p-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-semibold">{n.channel === "email" ? "✉️ Email" : "💬 Text"}</span>
+            <span className="text-muted">· {KIND_LABEL[n.kind] ?? n.kind} · to {n.to_address}</span>
+            <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-semibold ${n.status === "sent" ? "bg-good-soft text-good" : n.status === "failed" ? "bg-bad-soft text-bad" : "bg-panel-2 text-muted"}`}
+              title={n.status === "simulated" ? "Demo outbox: nothing was sent to a real phone or inbox" : undefined}>
+              {n.status}
+            </span>
+          </div>
+          {n.subject && <div className="mt-1 font-medium">{n.subject}</div>}
+          <details className="mt-0.5">
+            <summary className="cursor-pointer text-muted">{n.body.slice(0, 90)}{n.body.length > 90 ? "…" : ""}</summary>
+            <p className="mt-1 whitespace-pre-wrap">{n.body}</p>
+          </details>
+          {n.has_invite && (
+            <a href={api.inviteUrl(n.id, patient)} className="mt-1 inline-block text-accent hover:underline">📅 Download calendar invite (.ics)</a>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PatientRecord({ h }: { h: PatientHistory | null }) {
+  if (!h) return null;
+  if (!h.registered || !h.profile)
+    return (
+      <p className="text-xs text-muted">
+        New patient: no record yet. The agent collects your details in the chat (name, date of birth, phone, email,
+        insurance). <b>Demo: use made-up details only</b>, e.g. phone 555-0142 and an @example.com email.
+      </p>
+    );
+  const p = h.profile;
+  return (
+    <div className="space-y-2 text-xs">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+        <dt className="text-muted">Name</dt><dd className="font-medium">{p.first_name} {p.last_name}</dd>
+        <dt className="text-muted">Born</dt><dd>{p.date_of_birth}</dd>
+        <dt className="text-muted">Contact</dt><dd>{p.phone} · {p.email}</dd>
+        <dt className="text-muted">Insurance</dt>
+        <dd>{p.insurance_provider}{p.insurance_member_id ? ` (${p.insurance_member_id})` : ""} · <span className="text-muted">{INSURANCE_LABEL[p.insurance_status] ?? p.insurance_status}</span></dd>
+      </dl>
+      {h.past_visits.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-muted">Past visits ({h.past_visits.length})</summary>
+          <ul className="mt-1 divide-y divide-line">
+            {h.past_visits.map((v) => (
+              <li key={v.date + v.time} className="flex justify-between gap-2 py-1">
+                <span>{prettyDate(v.date, { month: "short", day: "numeric", year: "numeric" })} · {v.service} · {v.provider}</span>
+                <span className={VISIT_STATUS[v.status] ?? "text-muted"}>{v.status.replace("_", "-")}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
 
 const STOP_LABEL: Record<string, { text: string; cls: string }> = {
   booked_verified: { text: "booked · verified in DB", cls: "bg-good-soft text-good" },
@@ -63,7 +149,10 @@ function AssistantBubble({ m }: { m: Extract<Message, { role: "assistant" }> }) 
 export default function Home() {
   const auth = useAuth();
   const [config, setConfig] = useState<Config | null>(null);
-  const [demoPatient, setDemoPatient] = useState("Test Patient A");
+  const [demoPatient, setDemoPatient] = useState("Test Patient A");   // dropdown: an alias, or NEW
+  const [sessionPatient, setSessionPatient] = useState<string | null>(null);   // alias the server gave this chat
+  const [record, setRecord] = useState<PatientHistory | null>(null);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -78,8 +167,11 @@ export default function Home() {
 
   const ready = auth.ready && auth.signedIn;
   const signedInPatient = auth.me?.signed_in ? auth.me.patient : undefined;
-  const patient = signedInPatient ?? demoPatient;
-  const patientParam = auth.me?.signed_in ? undefined : demoPatient; // signed in: the server knows who you are
+  const isNewDemo = !auth.me?.signed_in && demoPatient === NEW;
+  // The patient this chat is about. A new patient's alias comes from the server once the chat starts.
+  const patient = signedInPatient ?? (isNewDemo ? (sessionPatient ?? "New patient") : demoPatient);
+  const patientParam = auth.me?.signed_in ? undefined : isNewDemo ? (sessionPatient ?? undefined) : demoPatient;
+  const dataReady = !isNewDemo || !!sessionPatient;
 
   const loadMine = useCallback(async () => {
     if (supabase && auth.me?.signed_in) {
@@ -103,13 +195,17 @@ export default function Home() {
   }, [auth.me, patientParam]);
 
   const refreshData = useCallback(async () => {
+    if (!dataReady) return;
     try {
-      const [s] = await Promise.all([api.schedule(patientParam, weekStart), loadMine()]);
+      const [s, h, n] = await Promise.all([api.schedule(patientParam, weekStart), api.patientHistory(patientParam),
+        api.notifications(patientParam), loadMine()]);
       setSchedule(s);
+      setRecord(h);
+      setNotices(n);
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [patientParam, weekStart, loadMine]);
+  }, [patientParam, weekStart, loadMine, dataReady]);
 
   useEffect(() => {
     if (!ready) return;
@@ -117,12 +213,16 @@ export default function Home() {
       setError(e.message.startsWith("500") ? `Backend not reachable: ${e.message}` : e.message));
   }, [ready]);
 
+  // A new chat whenever the patient in the dropdown changes. "New patient" gets a fresh, empty record each time.
+  const sessionFor = auth.me?.signed_in ? "" : demoPatient;
   useEffect(() => {
     if (!ready || !auth.me) return;
-    api.newSession(patientParam ?? "")
-      .then(({ session_id }) => { setSessionId(session_id); setMessages([]); setPending(null); })
+    setSessionPatient(null);
+    setRecord(null);
+    api.newSession(sessionFor)
+      .then(({ session_id, patient: p }) => { setSessionId(session_id); setSessionPatient(p); setMessages([]); setPending(null); })
       .catch((e: Error) => setError(e.message));
-  }, [ready, auth.me, patientParam]);
+  }, [ready, auth.me, sessionFor]);
 
   useEffect(() => {
     if (ready && auth.me) refreshData();
@@ -131,6 +231,13 @@ export default function Home() {
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, busy]);
+
+  // The reminder agent works in the background: refresh Messages / appointments every 15 s without any chat.
+  useEffect(() => {
+    if (!ready || !auth.me || !dataReady) return;
+    const t = setInterval(refreshData, 15000);
+    return () => clearInterval(t);
+  }, [ready, auth.me, dataReady, refreshData]);
 
   const addTurn = useCallback((r: TurnResult) => {
     setMessages((ms) => [...ms, { role: "assistant", text: r.reply, stop: r.stop_reason, steps: r.steps, agent: r.agent }]);
@@ -183,8 +290,9 @@ export default function Home() {
     try {
       await api.reset();
       setWeekStart(undefined);
-      const { session_id } = await api.newSession(patientParam ?? "");
+      const { session_id, patient: p } = await api.newSession(sessionFor);
       setSessionId(session_id);
+      setSessionPatient(p);
       setMessages([]);
       setPending(null);
       await refreshData();
@@ -225,6 +333,7 @@ export default function Home() {
             <select value={demoPatient} onChange={(e) => setDemoPatient(e.target.value)} disabled={busy}
               className="rounded border border-line bg-panel px-2 py-1" aria-label="Patient (demo mode)">
               {(config?.patients ?? ["Test Patient A"]).map((p) => <option key={p}>{p}</option>)}
+              <option value={NEW}>New patient (intake)</option>
             </select>
           )}
           {isStaff && (
@@ -258,9 +367,13 @@ export default function Home() {
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
             {messages.length === 0 && (
               <div className="m-auto max-w-lg text-center text-sm text-muted">
-                <p className="mb-3">Book, cancel or move an appointment, or ask about the office. Try one:</p>
+                <p className="mb-3">
+                  {isNewDemo
+                    ? "You're a new patient. The agent will collect your details in the chat before booking. Use made-up details only. Try one:"
+                    : "Book, cancel or move an appointment, ask about your visits or insurance, or about the office. Try one:"}
+                </p>
                 <div className="flex flex-wrap justify-center gap-2">
-                  {EXAMPLES.map((ex) => (
+                  {(isNewDemo ? NEW_EXAMPLES : EXAMPLES).map((ex) => (
                     <button key={ex} onClick={() => send(ex)} className="rounded-full border border-line bg-panel px-3 py-1 text-xs text-ink hover:border-accent">
                       {ex}
                     </button>
@@ -302,8 +415,19 @@ export default function Home() {
 
         <aside className="flex flex-col gap-4">
           <section className="rounded-xl border border-line bg-panel p-4">
+            <h2 className="mb-2 text-sm font-semibold">Patient record · {patient}</h2>
+            <PatientRecord h={record} />
+          </section>
+          <section className="rounded-xl border border-line bg-panel p-4">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold">My appointments · {patient}</h2>
+              <h2 className="text-sm font-semibold">Messages</h2>
+              <span className="rounded bg-panel-2 px-1.5 py-0.5 text-[10px] text-muted" title="Sent by the background reminder agent">reminder agent</span>
+            </div>
+            <Messages items={notices} patient={patientParam} />
+          </section>
+          <section className="rounded-xl border border-line bg-panel p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Upcoming appointments</h2>
               <span className="rounded bg-panel-2 px-1.5 py-0.5 text-[10px] text-muted"
                 title={mineSource === "rls" ? "Read directly from Supabase; Row Level Security returns only your rows" : "Read through the API"}>
                 {mineSource === "rls" ? "via Supabase RLS" : "via API"}

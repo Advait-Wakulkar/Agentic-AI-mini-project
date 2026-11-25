@@ -136,13 +136,61 @@ book / cancel / reschedule ─▶ staff queue (DB) ─▶ STAFF approve/deny ─
 | `list_my_appointments()` | The patient's upcoming appointments with their ids |
 | `cancel_appointment(appointment_id, reason)` | Checks it is theirs and they asked to cancel; **staff approval**; marks it cancelled; re-reads |
 | `reschedule_appointment(appointment_id, new_date, new_time, provider?, reason)` | Finds the new slot; **staff approval**; books new + cancels old atomically; re-reads |
+| `get_my_history()` | The patient's profile, insurance, upcoming appointments, past visits (completed, cancelled, no-shows) |
+| `register_patient(first_name, last_name, date_of_birth, phone, email, insurance_provider, insurance_member_id?)` | New-patient intake. Python checks every field and that each value came from the patient's own messages; saves only if all pass |
+| `verify_insurance(insurance_provider?, member_id?)` | **Simulated** eligibility check (no real insurer); stores the result on the record |
+| `send_calendar_invite(appointment_id)` | Emails a real `.ics` invite for one of the patient's own booked appointments (simulated outbox) |
 | `transfer(to)` | Hands the conversation to the other agent |
 | `reply(message)` | Answers the patient and ends the turn (after the output guard) |
 
 | Agent | Tools it may use |
 |---|---|
-| Scheduling | `list_openings`, `find_next_openings`, `check_availability`, `list_my_appointments`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `transfer`, `reply` |
-| FAQ | `get_office_info`, `transfer`, `reply` |
+| Scheduling | `list_openings`, `find_next_openings`, `check_availability`, `list_my_appointments`, `get_my_history`, `register_patient`, `verify_insurance`, `send_calendar_invite`, `book_appointment`, `cancel_appointment`, `reschedule_appointment`, `transfer`, `reply` |
+| FAQ | `get_office_info`, `get_my_history`, `verify_insurance`, `transfer`, `reply` |
+| Reminders (background) | `send_email`, `send_sms`, `finish` |
+
+### Patient records, new-patient intake, simulated insurance check
+
+- **Returning patients:** each fictional patient has a profile and a seeded visit history in Postgres (`patients`,
+  `visit_history`). At the start of every turn Python puts a short, factual summary of the record into the agent's
+  prompt (name, insurance, upcoming appointments, last visit), so the agent greets them by name and doesn't re-ask
+  for anything on file. `get_my_history` returns the full detail.
+- **New patients:** choose *New patient (intake)* in the UI (or sign in for the first time). The agent collects first
+  name, last name, date of birth, phone, email and insurance (plan + member ID, or self-pay) in the chat.
+  Python enforces it: `book_appointment` is rejected until the patient is registered (`patient_registered`), every
+  intake value must appear in the patient's own messages (`details_from_patient`), and `register_patient` validates each
+  field. **Only fictional data is accepted:** phones must be in the reserved 555-0100 to 555-0199 range and emails
+  must use the reserved `example.com` / `.test` domains, so no real person's details can be saved.
+- **Insurance:** `verify_insurance` is a **simulated** eligibility check, clearly labelled as one everywhere. It
+  shows the steps a real check would take (an X12 270 request and 271 response through a "clearinghouse"), with
+  repeatable rules: Delta Dental / Aetna / Cigna / MetLife / Guardian → in network; Humana / UnitedHealthcare /
+  Blue Cross → out of network; any other plan → not found; member ID ending `000` → inactive; ending `999` → payer
+  timeout (a tool failure the agent must report honestly). The output guard still blocks "we accept your plan"
+  unless this check actually returned *in network*.
+- **Staff** see the patient's name, date of birth, insurance status and a *new patient* badge on each approval card.
+
+### Reminder agent (runs in the background)
+
+A third agent, [backend/reminders.py](backend/reminders.py), works **without any chat message**: a worker thread inside
+the API wakes up every `REMINDER_INTERVAL_SECONDS` (default 60), and staff can also click **Run now**
+(or run `python -m backend.reminders --once` from cron).
+
+1. **Python picks the work**: new bookings with no confirmation yet, and appointments starting within
+   `REMINDER_WINDOW_HOURS` (default 48) with no reminder. The model never decides who gets a message.
+2. **The model writes and proposes**: `send_email(subject, message)`, `send_sms(message)`, `finish()`. Those are its only tools.
+3. **Python checks each message** (it names the real date and time, mentions no other time, contains no phone number
+   and no medical advice), fills in the recipient **from the patient record**, attaches the calendar invite, and records
+   it. A unique index means a confirmation or reminder is never sent twice.
+4. **Grounded fallback**: if the model fails, Python sends a correct template instead.
+
+| Channel | Real or simulated |
+|---|---|
+| Calendar invite (`.ics`) | **Real** file (RFC 5545); download it under *Messages*, it is attached to every email |
+| Email | **Simulated outbox** by default; really sent over SMTP if `SMTP_HOST` is set (e.g. a local Mailpit on port 1025) |
+| SMS | **Simulated** (real texting needs a paid provider and real numbers; all patient numbers are fictional) |
+
+In the chat, the scheduling agent has `send_calendar_invite(appointment_id)` for "send me a calendar invite".
+Patients see everything under **Messages**; staff see the full log on the dashboard.
 
 There is no delete tool and no raw SQL. The patient is fixed by the session (or sign-in), so an agent cannot
 see or change anyone else's appointments.
