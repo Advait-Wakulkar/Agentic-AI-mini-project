@@ -20,9 +20,7 @@ OUT = HERE / "Project_Report.pdf"
 AUTHOR = "Advait Wakulkar"
 SCHOOL = "Khoury College of Computer Sciences, Northeastern University"
 COURSE = "CSYE 7374: Agentic AI"
-INSTRUCTOR = "[Instructor Name]"
-DUE = "[Due Date]"
-REPO = "[GitHub repository URL]"
+REPO = "https://github.com/Advait-Wakulkar/Agentic-AI-mini-project"
 TITLE = "Bright Smile Dental: A Tool-Using Appointment Scheduling Agent With Human Approval"
 
 DS = 24  # double spacing for 12 pt
@@ -89,7 +87,7 @@ def bullets(items):
 
 # ---------------------------------------------------------------- title page
 story += [Spacer(1, 2.2 * inch), Paragraph(TITLE, title_st), Spacer(1, DS)]
-for line in (AUTHOR, SCHOOL, COURSE, INSTRUCTOR, DUE):
+for line in (AUTHOR, SCHOOL, COURSE):
     P(line, center)
 story.append(PageBreak())
 
@@ -281,7 +279,7 @@ table(4, "Selected Defects Found by Evaluation and How They Were Fixed", [
 ], [1.35, 2.6, 2.55])
 
 P("How to Run the Project", h1)
-P(f"The code is available at {REPO}. The project needs Python 3.12 or later, Node.js 20 or later, a PostgreSQL "
+P(f"The code is available at {REPO}. The project needs Python 3.14, Node.js 20 or later, a PostgreSQL "
   "connection string (a free Supabase project works), and an OpenRouter API key for the agents and the router; a "
   "local model through Ollama can replace the hosted agents. All data is generated: the database is created and "
   "seeded with the fictional schedule and patients on first start.", body)
