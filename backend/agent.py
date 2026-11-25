@@ -203,6 +203,14 @@ def _finish_request(session: Session, turn: Turn, request: dict, approved: bool,
 
 
 PROVIDER_NAMES = ["Rivera", "Chen", "Okafor"]
+# Patients also name a provider by role. Found live: "the 9:30 with the hygienist" (= Dr. Okafor) was not recognised.
+_PROVIDER_ROLES = {"Okafor": re.compile(r"\bhygien(ist|e)\b", re.I)}
+
+
+def named_providers(text: str) -> list[str]:
+    """Providers the text names, by surname or by role ('the hygienist')."""
+    low = text.lower()
+    return [p for p in PROVIDER_NAMES if p.lower() in low or (p in _PROVIDER_ROLES and _PROVIDER_ROLES[p].search(text))]
 
 
 _SPANISH_DAYS = {"lunes": "monday", "martes": "tuesday", "miércoles": "wednesday", "miercoles": "wednesday",
@@ -238,7 +246,8 @@ def mentions_time(text: str, hhmm: str) -> bool:
     t = text.lower()
     patterns = [rf"\b{h:02d}:{m:02d}\b", rf"\b{h}:{m:02d}\b", rf"\b{h12}:{m:02d}\s*({suffix})?\b"]
     if m == 0:
-        patterns += [rf"\b{h12}\s*{suffix}\b", rf"\b{h12}\s*o'?clock\b", rf"\bat {h12}\b(?!:)"]
+        patterns += [rf"\b{h12}\s*{suffix}\b", rf"\b{h12}\s*o'?clock\b", rf"\bat {h12}\b(?!:)",
+                     rf"\bthe {h12}\b(?![:.]\d)"]   # live demo: "the 10 with the hygienist" ("the 10th" is a date)
     # Spoken times, found in a live UI run: "half ten" (10:30) was not recognised.
     word = _HOUR_WORDS[h12]
     spoken = {0: [rf"\b{word}\s+o'?clock\b"],
@@ -282,7 +291,7 @@ def _substitution_problem(session: Session, turn: Turn, slot_id: str) -> Optiona
                     "reply does not say which one. Ask which time they want; do not pick for them.")
         return (f"check 'patient_chose_slot': the patient picked {chosen['date']} {chosen['time']} with "
                 f"{chosen['provider']}, not this slot. Use slot {chosen['slot_id']} instead.")
-    named = [p for p in PROVIDER_NAMES if p.lower() in msg.lower()]
+    named = named_providers(msg)
     what = f"{slot['date']} {slot['time']} with {slot['provider']}"
     if named and not any(p in slot["provider"] for p in named):
         return (f"check 'patient_chose_slot': the patient asked for Dr. {' or Dr. '.join(named)}, but {what} is with "
@@ -344,7 +353,7 @@ def picked_option(message: str, offered: list[dict], today: date) -> Optional[di
         if re.search(rf"\b{word}\b", t):
             return offered[idx] if -len(offered) <= idx < len(offered) else None
     candidates = [o for o in offered if mentions_time(t, o["time"])]
-    named = [p for p in PROVIDER_NAMES if p.lower() in t]
+    named = named_providers(t)
     if named:
         candidates = [o for o in candidates if any(p in o["provider"] for p in named)]
     if len(candidates) > 1:
@@ -397,7 +406,7 @@ def _grounded_options(session: Session, turn: Turn, limit: int = 3) -> list[dict
         still_open = [s for s in (tools.slot_details(session.conn, o["slot_id"]) for o in session.last_offered)
                       if s and not s["booked"]]
         return still_open[:max(limit, 5)]
-    named = [p for p in PROVIDER_NAMES if p.lower() in turn.user_message.lower()]
+    named = named_providers(turn.user_message)
     slots = [s for s in (tools.slot_details(session.conn, sid) for sid in turn.turn_slots) if s and not s["booked"]]
     slots.sort(key=lambda s: (not any(p in s["provider"] for p in named), s["date"], s["time"]))
     return slots[:limit]

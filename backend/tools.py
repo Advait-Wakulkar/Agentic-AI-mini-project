@@ -407,8 +407,11 @@ def patient_context(conn, patient_alias: str, today: str) -> str:
         return ("NEW PATIENT: no record on file yet. Before you can request a booking you must collect, in the chat: "
                 "first name, last name, date of birth, phone, email, and insurance provider with member ID (or 'self-pay'). "
                 "Ask only for what is still missing, a few details at a time, and never invent or guess a value. "
-                "This is a demo: ask them to use made-up details (phone in the 555-0100 to 555-0199 range, email ending "
-                "in @example.com). When you have everything, call register_patient. They may look at openings first.")
+                "This is a demo, so made-up details are expected (e.g. a phone in the 555-0100 to 555-0199 range and an "
+                "email ending in @example.com), but do NOT judge the details yourself: some real addresses are approved "
+                "by the office. When you have everything, call register_patient with exactly what the patient gave; "
+                "Python checks every field and returns invalid_fields for anything not accepted. Only then ask them to "
+                "correct those fields. They may look at openings first.")
     p, s = h["profile"], h["summary"]
     ins = ("self-pay" if (p["insurance_provider"] or "").lower() in SELF_PAY
            else f"{p['insurance_provider']} (member ID {p['insurance_member_id']}; eligibility {p['insurance_status']})")

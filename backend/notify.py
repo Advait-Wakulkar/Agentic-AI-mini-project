@@ -65,7 +65,7 @@ def _send_smtp(to: str, subject: str, body: str, ics: str | None) -> None:
         if config.SMTP_STARTTLS:
             s.starttls()
         if config.SMTP_USER:
-            s.login(config.SMTP_USER, config.SMTP_PASSWORD)
+            s.login(config.SMTP_USER, config.SMTP_PASSWORD.replace(" ", ""))   # Google shows app passwords with spaces
         s.send_message(msg)
 
 

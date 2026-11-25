@@ -1,0 +1,117 @@
+{
+  "session": "3828a00c",
+  "timestamp": "2026-11-24T21:14:35",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient B",
+  "user_message": "half two works",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "patient picked an offered time"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261201-1430-P1\", \"reason\": \"Cleaning with Dr. Rivera on Tuesday 2026-12-01 at 14:30, requested by patient Blake Sample via chat.\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261201-1430-P1",
+          "reason": "Cleaning with Dr. Rivera on Tuesday 2026-12-01 at 14:30, requested by patient Blake Sample via chat."
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261201-1430-P1",
+        "date": "2026-12-01",
+        "time": "14:30",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient B",
+        "reason": "Cleaning with Dr. Rivera on Tuesday 2026-12-01 at 14:30, requested by patient Blake Sample via chat.",
+        "patient_request": "half two works",
+        "patient_profile": {
+          "name": "Blake Sample",
+          "date_of_birth": "1985-09-30",
+          "phone": "555-0102",
+          "email": "blake.sample@example.com",
+          "insurance": "Aetna",
+          "insurance_status": "verified_in_network",
+          "new_patient": false
+        }
+      },
+      "request_id": 2
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "awaiting_approval",
+      "reply": "I've sent 2026-12-01 at 14:30 with Dr. Rivera to our staff for approval. I'll update you here once they decide."
+    }
+  ],
+  "final_reply": "I've sent 2026-12-01 at 14:30 with Dr. Rivera to our staff for approval. I'll update you here once they decide.",
+  "stop_reason": "awaiting_approval",
+  "seconds": 5.6,
+  "db_appointments_for_patient": []
+}

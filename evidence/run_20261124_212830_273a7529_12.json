@@ -1,0 +1,223 @@
+{
+  "session": "273a7529",
+  "timestamp": "2026-11-24T21:28:30",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient 7DD8",
+  "user_message": "yes",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261125-1000-P3\", \"reason\": \"New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261125-1000-P3",
+          "reason": "New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261125-1000-P3",
+        "date": "2026-11-25",
+        "time": "10:00",
+        "provider": "Dr. Okafor",
+        "patient_alias": "New Patient 7DD8",
+        "reason": "New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00",
+        "patient_request": "yes",
+        "patient_profile": {
+          "name": "Sam Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance": "self-pay",
+          "insurance_status": "self_pay",
+          "new_patient": true
+        }
+      },
+      "request_id": 3
+    },
+    {
+      "step": 6,
+      "kind": "HUMAN_DECISION",
+      "agent": "scheduling",
+      "approved": true,
+      "channel": "staff:demo",
+      "approval_id": 114,
+      "request": {
+        "slot_id": "S-20261125-1000-P3",
+        "date": "2026-11-25",
+        "time": "10:00",
+        "provider": "Dr. Okafor",
+        "patient_alias": "New Patient 7DD8",
+        "reason": "New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00",
+        "patient_request": "yes",
+        "patient_profile": {
+          "name": "Sam Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance": "self-pay",
+          "insurance_status": "self_pay",
+          "new_patient": true
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VERIFY",
+      "agent": "scheduling",
+      "action": "book",
+      "saved": {
+        "ok": true
+      },
+      "verified": true,
+      "slot_id": "S-20261125-1000-P3"
+    },
+    {
+      "step": 8,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "book_appointment",
+      "observation": {
+        "ok": true,
+        "approved": true,
+        "verified": true,
+        "action": "book",
+        "request": {
+          "slot_id": "S-20261125-1000-P3",
+          "date": "2026-11-25",
+          "time": "10:00",
+          "provider": "Dr. Okafor",
+          "patient_alias": "New Patient 7DD8",
+          "reason": "New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00",
+          "patient_request": "yes",
+          "patient_profile": {
+            "name": "Sam Example",
+            "date_of_birth": "1995-06-15",
+            "phone": "555-0150",
+            "email": "sam@example.com",
+            "insurance": "self-pay",
+            "insurance_status": "self_pay",
+            "new_patient": true
+          }
+        }
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"You're booked, Sam. Your cleaning with Dr. Okafor is confirmed for Wednesday, 25 November 2026 at 10:00. Reminders will be sent to you by email and text. Would you like a calendar invite sent to sam@example.com as well?\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "You're booked, Sam. Your cleaning with Dr. Okafor is confirmed for Wednesday, 25 November 2026 at 10:00. Reminders will be sent to you by email and text. Would you like a calendar invite sent to sam@example.com as well?"
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "booked_verified",
+      "reply": "You're booked, Sam. Your cleaning with Dr. Okafor is confirmed for Wednesday, 25 November 2026 at 10:00. Reminders will be sent to you by email and text. Would you like a calendar invite sent to sam@example.com as well?"
+    }
+  ],
+  "final_reply": "You're booked, Sam. Your cleaning with Dr. Okafor is confirmed for Wednesday, 25 November 2026 at 10:00. Reminders will be sent to you by email and text. Would you like a calendar invite sent to sam@example.com as well?",
+  "stop_reason": "booked_verified",
+  "seconds": 339.21,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261125-1000-P3",
+      "date": "2026-11-25",
+      "time": "10:00",
+      "provider": "Dr. Okafor",
+      "patient_alias": "New Patient 7DD8",
+      "reason": "New patient Sam Example confirmed cleaning with hygienist Dr. Okafor, Wednesday 2026-11-25 at 10:00",
+      "approval_id": 114,
+      "status": "booked",
+      "created_at": "2026-11-24T21:28:28",
+      "cancelled_at": null
+    }
+  ]
+}

@@ -274,3 +274,13 @@ def test_picking_an_offered_time_always_goes_to_scheduling(conn):
                           urgency=0, source="test")
     assert choose_agent(session, faq_intent, "the first one please")[0] == "scheduling"
     assert choose_agent(session, faq_intent, "what are your hours?")[0] == "faq"     # not a pick: router decides
+
+
+def test_provider_named_by_role_picks_the_slot(conn):
+    """Live demo: 'the 9:30 with the hygienist' (two 9:30 options) was blocked; the hygienist is Dr. Okafor."""
+    from backend.agent import named_providers, picked_option
+    assert named_providers("the 9:30 with the hygienist please") == ["Okafor"]
+    offered = [tools.slot_details(conn, s) for s in ("S-20261123-0930-P2", "S-20261123-0930-P3")]
+    offered = [o for o in offered if not o["booked"]]
+    if len(offered) == 2:
+        assert picked_option("the 9:30 with the hygienist", offered, TODAY)["provider"] == "Dr. Okafor"

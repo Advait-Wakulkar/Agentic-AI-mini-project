@@ -71,6 +71,8 @@ def test_mentions_date(text, iso, ok):
     ("half ten sounds good", "10:30", True), ("half past two", "14:30", True), ("ten thirty", "10:30", True),
     ("quarter past nine", "09:15", True), ("ten o'clock", "10:00", True), ("half ten", "10:00", False),
     ("half ten", "11:30", False),
+    # live demo: "the 10 with the hygienist"
+    ("the 10 with the hygienist", "10:00", True), ("the 10th works", "10:00", False), ("the 10:30 one", "10:00", False),
 ])
 def test_mentions_time(text, hhmm, ok):
     from backend.agent import mentions_time
