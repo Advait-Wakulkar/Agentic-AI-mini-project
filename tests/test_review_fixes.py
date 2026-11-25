@@ -227,3 +227,15 @@ def test_title_does_not_split_a_history_sentence():
     assert not claims_change("Your record also shows a cleaning on September 20, 2026, with Dr. Okafor, listed as cancelled.", TODAY)
     assert claims_change("Your appointment with Dr. Okafor on November 30, 2026 was cancelled.", TODAY)
     assert claims_booking("You are booked with Dr. Chen. See you then!", TODAY)
+
+
+@pytest.mark.parametrize("text, claim", [
+    ("I understand you'd like this booked quickly, but I can't approve bookings myself.", False),   # final demo
+    ("I haven't booked anything yet.", False),
+    ("Your cleaning is booked for Monday at 10:00.", True),
+    ("You're all set for Monday at 10:00!", True),
+    ("I have booked you in with Dr. Chen.", True),
+])
+def test_contractions_and_wishes_are_not_booking_claims(text, claim):
+    from backend.agent import claims_booking
+    assert claims_booking(text, TODAY) is claim

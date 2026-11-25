@@ -1,0 +1,190 @@
+{
+  "session": "685faa56",
+  "timestamp": "2026-11-24T22:23:15",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "faq",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "hey, when was I last in? and is my insurance still good?",
+  "decision": {
+    "intent": "ask_info",
+    "intent_probs": {
+      "book": 0.1,
+      "ask_info": 0.7,
+      "cancel_or_reschedule": 0.1,
+      "other": 0.1
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.7,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "ask_info",
+        "intent_probs": {
+          "book": 0.1,
+          "ask_info": 0.7,
+          "cancel_or_reschedule": 0.1,
+          "other": 0.1
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.7,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "faq",
+      "reason": "intent=ask_info"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+      "proposal": {
+        "action": "get_my_history",
+        "argument": {}
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "faq",
+      "action": "get_my_history",
+      "observation": {
+        "ok": true,
+        "registered": true,
+        "profile": {
+          "first_name": "Casey",
+          "last_name": "Placeholder",
+          "date_of_birth": "2001-01-15",
+          "phone": "555-0103",
+          "email": "casey.placeholder@example.com",
+          "insurance_provider": "self-pay",
+          "insurance_member_id": null,
+          "insurance_status": "unverified",
+          "patient_since": "2025-10-20"
+        },
+        "upcoming": [],
+        "past_visits": [
+          {
+            "date": "2026-08-26",
+            "time": "09:00",
+            "provider": "Dr. Rivera",
+            "service": "emergency visit",
+            "status": "completed",
+            "note": "Chipped tooth repaired."
+          }
+        ],
+        "cancelled_upcoming": [],
+        "summary": {
+          "completed_visits": 1,
+          "last_visit": {
+            "date": "2026-08-26",
+            "time": "09:00",
+            "provider": "Dr. Rivera",
+            "service": "emergency visit",
+            "status": "completed",
+            "note": "Chipped tooth repaired."
+          },
+          "no_shows": 0
+        }
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\"action\": \"verify_insurance\", \"argument\": {}}",
+      "proposal": {
+        "action": "verify_insurance",
+        "argument": {}
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "faq",
+      "action": "verify_insurance",
+      "observation": {
+        "ok": true,
+        "simulated": true,
+        "service": "Simulated eligibility check (demo only: no real insurer contacted)",
+        "status": "self_pay",
+        "detail": "Self-pay patient: no eligibility check needed."
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Casey! Your last visit was on 2026-08-26 at 09:00 with Dr. Rivera, an emergency visit where a chipped tooth was repaired. As for insurance, your record shows you're self-pay, so there's no insurance on file to check. This was a simulated check, and the front desk can confirm any final details for you.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Hi Casey! Your last visit was on 2026-08-26 at 09:00 with Dr. Rivera, an emergency visit where a chipped tooth was repaired. As for insurance, your record shows you're self-pay, so there's no insurance on file to check. This was a simulated check, and the front desk can confirm any final details for you."
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "faq",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "faq",
+      "stop_reason": "replied",
+      "reply": "Hi Casey! Your last visit was on 2026-08-26 at 09:00 with Dr. Rivera, an emergency visit where a chipped tooth was repaired. As for insurance, your record shows you're self-pay, so there's no insurance on file to check. This was a simulated check, and the front desk can confirm any final details for you."
+    }
+  ],
+  "final_reply": "Hi Casey! Your last visit was on 2026-08-26 at 09:00 with Dr. Rivera, an emergency visit where a chipped tooth was repaired. As for insurance, your record shows you're self-pay, so there's no insurance on file to check. This was a simulated check, and the front desk can confirm any final details for you.",
+  "stop_reason": "replied",
+  "seconds": 7.62,
+  "db_appointments_for_patient": []
+}

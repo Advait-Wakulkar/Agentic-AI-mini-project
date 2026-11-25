@@ -1,0 +1,157 @@
+{
+  "session": "685faa56",
+  "timestamp": "2026-11-24T22:23:33",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "ok I'd like a check-up. can Dr. Rivera do Tuesday December 1st at 9am?",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "faq",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "faq",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"check_availability\", \"argument\": {\"date\": \"2026-12-01\", \"time\": \"09:00\", \"provider\": \"Dr. Rivera\"}}",
+      "proposal": {
+        "action": "check_availability",
+        "argument": {
+          "date": "2026-12-01",
+          "time": "09:00",
+          "provider": "Dr. Rivera"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "check_availability",
+      "observation": {
+        "ok": true,
+        "status": "unavailable",
+        "detail": "09:00 on 2026-12-01 is already booked with Dr. Rivera.",
+        "alternatives": [
+          {
+            "slot_id": "S-20261201-1400-P1",
+            "date": "2026-12-01",
+            "time": "14:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261201-1500-P1",
+            "date": "2026-12-01",
+            "time": "15:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261201-1530-P1",
+            "date": "2026-12-01",
+            "time": "15:30",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261201-1600-P1",
+            "date": "2026-12-01",
+            "time": "16:00",
+            "provider": "Dr. Rivera"
+          }
+        ],
+        "next_step": "Do not book. Reply offering these alternatives and ask the patient to choose."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Sorry, Dr. Rivera is already booked at 09:00 on Tuesday, December 1st. These times are open with Dr. Rivera that day: 14:00, 15:00, 15:30, or 16:00. Which one would you like? I can request it once you pick.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Sorry, Dr. Rivera is already booked at 09:00 on Tuesday, December 1st. These times are open with Dr. Rivera that day: 14:00, 15:00, 15:30, or 16:00. Which one would you like? I can request it once you pick."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "Sorry, Dr. Rivera is already booked at 09:00 on Tuesday, December 1st. These times are open with Dr. Rivera that day: 14:00, 15:00, 15:30, or 16:00. Which one would you like? I can request it once you pick."
+    }
+  ],
+  "final_reply": "Sorry, Dr. Rivera is already booked at 09:00 on Tuesday, December 1st. These times are open with Dr. Rivera that day: 14:00, 15:00, 15:30, or 16:00. Which one would you like? I can request it once you pick.",
+  "stop_reason": "replied",
+  "seconds": 5.2,
+  "db_appointments_for_patient": []
+}

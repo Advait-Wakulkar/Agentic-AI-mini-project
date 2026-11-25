@@ -7,6 +7,8 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${BACKEND_URL}/api/:path*` }];
   },
+  // No floating dev badge over the UI (it covered text in demo screenshots).
+  devIndicators: false,
   experimental: {
     // A local model can take well over the default 30 s for one agent turn.
     proxyTimeout: 300_000,

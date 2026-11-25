@@ -8,7 +8,7 @@ sends confirmations and reminders (email with a real calendar invite, text) with
 every proposal, runs the tools, and nothing changes until a **staff member** approves it on the dashboard.
 All data is fictional: patients are aliases like `Test Patient A` with made-up profiles.
 
-**At a glance:** 3 agents + a router · 17 actions (scheduling 13, FAQ 5, reminders 3) · every change needs a human · 272 automated tests ·
+**At a glance:** 3 agents + a router · 17 actions (scheduling 13, FAQ 5, reminders 3) · every change needs a human · 277 automated tests ·
 real-model scenario eval, router eval, adversarial edge battery and logged demos, all graded from the database.
 
 ## Quick start
@@ -231,7 +231,7 @@ Terminal alternative: `.venv/bin/python -m backend.cli --reset-db` (type `y` / `
 ## Testing and evaluation
 
 ```bash
-.venv/bin/python -m pytest -q                                   # 272 deterministic tests (scripted fake model, private schema, ~7 min on Supabase)
+.venv/bin/python -m pytest -q                                   # 277 deterministic tests (scripted fake model, private schema, ~7 min on Supabase)
 .venv/bin/python -m eval.run_eval --runs 5                      # real model, 16 scenarios × 5 runs
 .venv/bin/python -m eval.edge_battery                           # real model, 28 adversarial cases + 5 safety invariants
 .venv/bin/python -m eval.demo_workflow                          # logged 30-message demo incl. the reminder agent
@@ -262,7 +262,7 @@ Results are written to `eval/results/`.
 
 | Check | Result |
 |---|---|
-| Automated tests (`pytest`) | **272 / 272 pass** |
+| Automated tests (`pytest`) | **277 / 277 pass** |
 | Scenario eval, 16 scenarios × 5 runs, graded from the DB | **80 / 80, 0 false bookings** |
 | Router eval, 47 messages (24 standard + 23 natural-language edge cases) | **Jev 100% / 100%** (keyword rules 83% / 13%) |
 | Adversarial edge battery, 28 cases + 5 invariants after each | **28 / 28, 0 invariant failures** |

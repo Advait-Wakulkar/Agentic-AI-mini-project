@@ -1,0 +1,117 @@
+{
+  "session": "685faa56",
+  "timestamp": "2026-11-24T22:23:53",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "3pm works",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "patient picked an offered time"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "\n{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261201-1500-P1\", \"reason\": \"Check-up with Dr. Rivera on Tuesday 2026-12-01 at 15:00, requested by returning patient Casey Placeholder\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261201-1500-P1",
+          "reason": "Check-up with Dr. Rivera on Tuesday 2026-12-01 at 15:00, requested by returning patient Casey Placeholder"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261201-1500-P1",
+        "date": "2026-12-01",
+        "time": "15:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient C",
+        "reason": "Check-up with Dr. Rivera on Tuesday 2026-12-01 at 15:00, requested by returning patient Casey Placeholder",
+        "patient_request": "3pm works",
+        "patient_profile": {
+          "name": "Casey Placeholder",
+          "date_of_birth": "2001-01-15",
+          "phone": "555-0103",
+          "email": "casey.placeholder@example.com",
+          "insurance": "self-pay",
+          "insurance_status": "unverified",
+          "new_patient": false
+        }
+      },
+      "request_id": 5
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "awaiting_approval",
+      "reply": "I've sent 2026-12-01 at 15:00 with Dr. Rivera to our staff for approval. I'll update you here once they decide."
+    }
+  ],
+  "final_reply": "I've sent 2026-12-01 at 15:00 with Dr. Rivera to our staff for approval. I'll update you here once they decide.",
+  "stop_reason": "awaiting_approval",
+  "seconds": 4.85,
+  "db_appointments_for_patient": []
+}

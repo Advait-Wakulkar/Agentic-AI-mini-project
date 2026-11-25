@@ -61,7 +61,11 @@ _NOT_A_CLAIM = re.compile(
     r"\byou (have|already have) (an?|one|two|three|\d+|no|any)\s+(upcoming\s+|existing\s+)?appointments?\b|"
     r"\byour (current|existing|upcoming|other) appointments?\b|"
     r"\b(not|n't|no|nothing|never|cannot|unable|yet|already|fully|taken|unavailable|"
-    r"if|once|after|before|would|shall|should|want|need|can I|could|may I|please (choose|confirm|pick))\b|\?",
+    r"if|once|after|before|would|shall|should|want|need|can I|could|may I|please (choose|confirm|pick))\b|\?|"
+    # Contractions ("can't", "won't", "haven't") and wishes ("you'd like this booked"). Found in the final demo:
+    # "I understand you'd like this booked quickly, but I can't approve bookings myself" was blocked as a claim;
+    # "\bn't" never matched because the apostrophe sits inside the word.
+    r"n['’]t\b|['’]d (like|prefer)\b|\blike (it|this|that|one|to)\b",
     re.I,
 )
 
