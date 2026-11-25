@@ -1,0 +1,225 @@
+{
+  "session": "ba8cebdc",
+  "timestamp": "2026-11-23T01:02:54",
+  "llm": "ollama:qwen3:1.7b",
+  "decider": "rules",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-23",
+  "patient_alias": "Test Patient A",
+  "user_message": "Can I see Dr. Rivera tomorrow at 9am?",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.769,
+      "ask_info": 0.0,
+      "cancel_or_reschedule": 0.0,
+      "other": 0.231
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "rules",
+    "confidence": 0.769,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "faq",
+      "decider": "rules",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.769,
+          "ask_info": 0.0,
+          "cancel_or_reschedule": 0.0,
+          "other": 0.231
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "rules",
+        "confidence": 0.769,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "faq",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"find_next_openings\", \"argument\": {\"provider\": \"Dr. Rivera\", \"part_of_day\": \"morning\"}}",
+      "proposal": {
+        "action": "find_next_openings",
+        "argument": {
+          "provider": "Dr. Rivera",
+          "part_of_day": "morning"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": false,
+      "errors": [
+        "check 'use_named_date': the patient named 2026-11-24 (Tuesday). Use check_availability (if they gave a time) or list_openings for that date instead."
+      ]
+    },
+    {
+      "step": 6,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "observation": {
+        "ok": false,
+        "rejected": true,
+        "errors": [
+          "check 'use_named_date': the patient named 2026-11-24 (Tuesday). Use check_availability (if they gave a time) or list_openings for that date instead."
+        ]
+      }
+    },
+    {
+      "step": 7,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_openings\", \"argument\": {\"date\": \"2026-11-24\", \"part_of_day\": \"morning\"}}",
+      "proposal": {
+        "action": "list_openings",
+        "argument": {
+          "date": "2026-11-24",
+          "part_of_day": "morning"
+        }
+      }
+    },
+    {
+      "step": 8,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 9,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_openings",
+      "observation": {
+        "ok": true,
+        "date": "2026-11-24",
+        "openings": [
+          {
+            "slot_id": "S-20261124-0900-P2",
+            "time": "09:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261124-0900-P3",
+            "time": "09:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261124-1000-P3",
+            "time": "10:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261124-1030-P2",
+            "time": "10:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261124-1030-P3",
+            "time": "10:30",
+            "provider": "Dr. Okafor"
+          }
+        ],
+        "total_open": 5
+      }
+    },
+    {
+      "step": 10,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_my_appointments\", \"argument\": {}}",
+      "proposal": {
+        "action": "list_my_appointments",
+        "argument": {}
+      }
+    },
+    {
+      "step": 11,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 12,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_my_appointments",
+      "observation": {
+        "ok": true,
+        "appointments": [],
+        "note": "This patient has no upcoming appointments."
+      }
+    },
+    {
+      "step": 13,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"You have no upcoming appointments. Let me know if you'd like to book one tomorrow at 9:00 AM or another time.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "You have no upcoming appointments. Let me know if you'd like to book one tomorrow at 9:00 AM or another time."
+        }
+      }
+    },
+    {
+      "step": 14,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 15,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 16,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "You have no upcoming appointments. Let me know if you'd like to book one tomorrow at 9:00 AM or another time."
+    }
+  ],
+  "final_reply": "You have no upcoming appointments. Let me know if you'd like to book one tomorrow at 9:00 AM or another time.",
+  "stop_reason": "replied",
+  "seconds": 6.0,
+  "db_appointments_for_patient": []
+}

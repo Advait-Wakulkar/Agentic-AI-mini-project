@@ -34,12 +34,75 @@ ACTIONS = {
     "get_office_info": {
         "required": {"topic": str},
         "optional": {},
-        "description": "Office facts. topic: hours | address | services | providers | cancellation_policy.",
+        "description": "Office facts. topic: hours | address | services | providers | cancellation_policy | insurance | prices.",
     },
     "book_appointment": {
         "required": {"slot_id": str, "reason": str},
         "optional": {},
         "description": "Request to book an open slot_id for the current patient. A human must approve; you cannot approve it yourself.",
+    },
+    "list_my_appointments": {
+        "required": {},
+        "optional": {},
+        "description": "The current patient's upcoming appointments, with their appointment_id.",
+    },
+    "cancel_appointment": {
+        "required": {"appointment_id": (int, str), "reason": str},
+        "optional": {},
+        "description": "Request to cancel one of the patient's appointments (appointment_id from list_my_appointments). A human must approve.",
+    },
+    "reschedule_appointment": {
+        "required": {"appointment_id": (int, str), "new_date": str, "new_time": str, "reason": str},
+        "optional": {"provider": str},
+        "description": "Request to move one of the patient's appointments to new_date (YYYY-MM-DD) at new_time (HH:MM). "
+                       "A human must approve.",
+    },
+    "get_my_history": {
+        "required": {},
+        "optional": {},
+        "description": "Everything on file for the current patient: profile, insurance, upcoming appointments, past visits "
+                       "(completed, cancelled, no-shows).",
+    },
+    "register_patient": {
+        "required": {"first_name": str, "last_name": str, "date_of_birth": str, "phone": str, "email": str,
+                     "insurance_provider": str},
+        "optional": {"insurance_member_id": str},
+        "description": "NEW patients only: save the details the patient gave in the chat. date_of_birth YYYY-MM-DD; "
+                       "insurance_provider is a plan name or 'self-pay' (member ID needed unless self-pay). "
+                       "Use only values the patient actually gave.",
+    },
+    "verify_insurance": {
+        "required": {},
+        "optional": {"insurance_provider": str, "member_id": str},
+        "description": "Run a SIMULATED insurance eligibility check (demo; no real insurer). Without arguments it checks "
+                       "the plan on file.",
+    },
+    "send_calendar_invite": {
+        "required": {"appointment_id": (int, str)},
+        "optional": {},
+        "description": "Email the patient a calendar invite (.ics) for one of their booked appointments "
+                       "(appointment_id from list_my_appointments). Email is a simulated outbox in this demo.",
+    },
+    # Reminder agent only. Python fills in the recipient from the patient record; the model never chooses it.
+    "send_email": {
+        "required": {"subject": str, "message": str},
+        "optional": {},
+        "description": "Email the patient (the calendar invite is attached automatically).",
+    },
+    "send_sms": {
+        "required": {"message": str},
+        "optional": {},
+        "description": "Text the patient a short message (under 300 characters).",
+    },
+    "finish": {
+        "required": {},
+        "optional": {},
+        "description": "End this job once the patient has been notified.",
+    },
+    "transfer": {
+        "required": {"to": str},
+        "optional": {},
+        "description": "Hand the conversation to another agent: 'scheduling' (book, cancel, reschedule) or 'faq' (office questions).",
     },
     "reply": {
         "required": {"message": str},
@@ -47,6 +110,16 @@ ACTIONS = {
         "description": "Send a message to the patient and end your turn (answer, question, or alternatives).",
     },
 }
+
+# Each agent may only use its own tools (least privilege). The validator enforces this.
+AGENT_ACTIONS = {
+    "scheduling": ["list_openings", "find_next_openings", "check_availability", "list_my_appointments",
+                   "get_my_history", "register_patient", "verify_insurance", "send_calendar_invite",
+                   "book_appointment", "cancel_appointment", "reschedule_appointment", "transfer", "reply"],
+    "faq": ["get_office_info", "get_my_history", "verify_insurance", "transfer", "reply"],
+    "reminders": ["send_email", "send_sms", "finish"],   # background agent: no chat, no schedule changes
+}
+CHAT_AGENTS = ("scheduling", "faq")   # the agents a chat can be transferred to
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -78,14 +151,18 @@ def parse_proposal(text: str) -> tuple[dict | None, str | None]:
     return obj, None
 
 
-def validate(proposal: dict, today: date, conn=None) -> list[str]:
+def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -> list[str]:
     """Return the list of failed checks. An empty list means the proposal is allowed."""
     errors: list[str] = []
     action = proposal.get("action")
     if not isinstance(action, str):
         return ["check 'action_present': missing or non-text 'action' field."]
     if action not in ACTIONS:
-        return [f"check 'known_action': '{action}' is not an allowed action. Allowed: {', '.join(ACTIONS)}."]
+        allowed_list = AGENT_ACTIONS[agent] if agent else list(ACTIONS)
+        return [f"check 'known_action': '{action}' is not an allowed action. Allowed: {', '.join(allowed_list)}."]
+    if agent and action not in AGENT_ACTIONS[agent]:
+        return [f"check 'agent_tools': the {agent} agent cannot use '{action}'. It can use: "
+                f"{', '.join(AGENT_ACTIONS[agent])}. Use transfer if another agent should handle this."]
 
     unknown_top = set(proposal) - {"action", "argument", "thought", "_repaired"}
     if unknown_top:
@@ -97,18 +174,21 @@ def validate(proposal: dict, today: date, conn=None) -> list[str]:
     spec = ACTIONS[action]
     allowed = {**spec["required"], **spec["optional"]}
     for name, typ in spec["required"].items():
-        if name not in arg:
+        if arg.get(name) is None:      # missing, or null (review: {"message": null} crashed the loop)
             errors.append(f"check 'required_arg': '{action}' needs argument '{name}'.")
     for name, value in arg.items():
         if name not in allowed:
             # This also blocks a model trying to pass its own 'approval' or 'patient_alias'.
             errors.append(f"check 'no_extra_args': '{name}' is not an argument of '{action}'.")
         elif value is not None and not isinstance(value, allowed[name]):
-            errors.append(f"check 'arg_type': '{name}' must be text, got {type(value).__name__}.")
+            want = "a number" if allowed[name] == (int, str) else "text"
+            errors.append(f"check 'arg_type': '{name}' must be {want}, got {type(value).__name__}.")
     if errors:
         return errors
 
     # Value checks.
+    if "new_date" in arg or "new_time" in arg:   # reschedule uses the same date/time checks
+        arg = {**arg, "date": arg.get("new_date", arg.get("date")), "time": arg.get("new_time", arg.get("time"))}
     if "date" in arg:
         if not DATE_RE.match(arg["date"]):
             errors.append("check 'date_format': date must be YYYY-MM-DD.")
@@ -128,8 +208,23 @@ def validate(proposal: dict, today: date, conn=None) -> list[str]:
             errors.append("check 'slot_id_format': use a slot_id exactly as returned by a tool, e.g. S-20261124-0900-P1.")
         elif conn is not None and conn.one("SELECT 1 AS found FROM slots WHERE id = ?", (arg["slot_id"],)) is None:
             errors.append(f"check 'slot_exists': slot '{arg['slot_id']}' does not exist.")
-        if not arg["reason"].strip():
-            errors.append("check 'reason_nonempty': give a short visit reason, e.g. 'cleaning'.")
-    if action == "reply" and not arg["message"].strip():
-        errors.append("check 'message_nonempty': the reply message is empty.")
+    if "reason" in spec["required"] and not str(arg["reason"]).strip():
+        # (all of book / cancel / reschedule: an empty reason could not be saved in the approvals audit row)
+        errors.append("check 'reason_nonempty': give a short reason, e.g. 'cleaning' or 'patient request'.")
+    if "appointment_id" in arg and not re.fullmatch(r"[0-9]{1,12}", str(arg["appointment_id"]).strip()):
+        # ASCII digits only (review: "²" passed isdigit() and then crashed int())
+        errors.append("check 'appointment_id': use the numeric appointment_id from list_my_appointments.")
+    if action == "transfer" and arg["to"] not in CHAT_AGENTS:
+        errors.append(f"check 'transfer_target': 'to' must be one of {', '.join(CHAT_AGENTS)}.")
+    if action in ("reply", "send_email", "send_sms") and not arg["message"].strip():
+        errors.append("check 'message_nonempty': the message is empty.")
+    if action == "send_sms" and len(arg["message"]) > 300:
+        errors.append("check 'sms_length': keep the text under 300 characters.")
+    if action == "send_email" and not arg["subject"].strip():
+        errors.append("check 'subject_nonempty': give the email a short subject.")
+    if action == "send_email" and re.search(r"[\r\n]", arg["subject"]):
+        errors.append("check 'subject_one_line': the subject must be one line.")   # (review: header injection)
+    for name, value in arg.items():
+        if isinstance(value, str) and len(value) > 4000:
+            errors.append(f"check 'arg_length': '{name}' is too long.")
     return errors

@@ -1,0 +1,98 @@
+{
+  "session": "4e825284",
+  "timestamp": "2026-11-24T21:15:20",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "also can you book my brother in for Monday at 9?",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"I can't book for your brother. I can only make appointments for you, Casey. He'll need to contact the office himself to book.\\n\\nFor yourself, Dr. Chen's open times on Friday, November 27 are 09:00, 09:30, 10:30 and 11:00. Would you like one of those?\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "I can't book for your brother. I can only make appointments for you, Casey. He'll need to contact the office himself to book.\n\nFor yourself, Dr. Chen's open times on Friday, November 27 are 09:00, 09:30, 10:30 and 11:00. Would you like one of those?"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "I can't book for your brother. I can only make appointments for you, Casey. He'll need to contact the office himself to book.\n\nFor yourself, Dr. Chen's open times on Friday, November 27 are 09:00, 09:30, 10:30 and 11:00. Would you like one of those?"
+    }
+  ],
+  "final_reply": "I can't book for your brother. I can only make appointments for you, Casey. He'll need to contact the office himself to book.\n\nFor yourself, Dr. Chen's open times on Friday, November 27 are 09:00, 09:30, 10:30 and 11:00. Would you like one of those?",
+  "stop_reason": "replied",
+  "seconds": 3.55,
+  "db_appointments_for_patient": []
+}

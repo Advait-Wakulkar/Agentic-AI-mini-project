@@ -1,0 +1,196 @@
+{
+  "session": "cc00f304",
+  "timestamp": "2026-11-23T23:40:42",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-23",
+  "patient_alias": "Test Patient A",
+  "user_message": "yes",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "\n{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261126-1400-P1\", \"reason\": \"Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261126-1400-P1",
+          "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name."
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261126-1400-P1",
+        "date": "2026-11-26",
+        "time": "14:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.",
+        "patient_request": "yes"
+      },
+      "request_id": 3
+    },
+    {
+      "step": 6,
+      "kind": "HUMAN_DECISION",
+      "agent": "scheduling",
+      "approved": true,
+      "channel": "staff:demo",
+      "approval_id": 114,
+      "request": {
+        "slot_id": "S-20261126-1400-P1",
+        "date": "2026-11-26",
+        "time": "14:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient A",
+        "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.",
+        "patient_request": "yes"
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VERIFY",
+      "agent": "scheduling",
+      "action": "book",
+      "saved": {
+        "ok": true
+      },
+      "verified": true,
+      "slot_id": "S-20261126-1400-P1"
+    },
+    {
+      "step": 8,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "book_appointment",
+      "observation": {
+        "ok": true,
+        "approved": true,
+        "verified": true,
+        "action": "book",
+        "request": {
+          "slot_id": "S-20261126-1400-P1",
+          "date": "2026-11-26",
+          "time": "14:00",
+          "provider": "Dr. Rivera",
+          "patient_alias": "Test Patient A",
+          "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.",
+          "patient_request": "yes"
+        }
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your appointment is booked: Thursday 26 November at 14:00 with Dr. Rivera, for 30 minutes. Is there anything else I can help you with?\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Your appointment is booked: Thursday 26 November at 14:00 with Dr. Rivera, for 30 minutes. Is there anything else I can help you with?"
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "booked_verified",
+      "reply": "Your appointment is booked: Thursday 26 November at 14:00 with Dr. Rivera, for 30 minutes. Is there anything else I can help you with?"
+    }
+  ],
+  "final_reply": "Your appointment is booked: Thursday 26 November at 14:00 with Dr. Rivera, for 30 minutes. Is there anything else I can help you with?",
+  "stop_reason": "booked_verified",
+  "seconds": 105.87,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261126-1400-P1",
+      "date": "2026-11-26",
+      "time": "14:00",
+      "provider": "Dr. Rivera",
+      "patient_alias": "Test Patient A",
+      "reason": "Patient chose Dr. Rivera for a 30-minute appointment on Thursday 26 November at 14:00 and confirmed with 'yes' after being asked to confirm the dentist by name.",
+      "approval_id": 114,
+      "status": "booked",
+      "created_at": "2026-11-23T23:40:41",
+      "cancelled_at": null
+    }
+  ]
+}

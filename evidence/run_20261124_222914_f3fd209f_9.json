@@ -1,0 +1,143 @@
+{
+  "session": "f3fd209f",
+  "timestamp": "2026-11-24T22:29:14",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient EF98",
+  "user_message": "ok, 555-0150 and sam@example.com",
+  "decision": {
+    "intent": "other",
+    "intent_probs": {
+      "book": 0.033,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.9
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "other",
+        "intent_probs": {
+          "book": 0.033,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.9
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "new-patient intake details"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"register_patient\", \"argument\": {\"first_name\": \"Sam\", \"last_name\": \"Example\", \"date_of_birth\": \"1995-06-15\", \"phone\": \"555-0150\", \"email\": \"sam@example.com\", \"insurance_provider\": \"self-pay\"}}",
+      "proposal": {
+        "action": "register_patient",
+        "argument": {
+          "first_name": "Sam",
+          "last_name": "Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance_provider": "self-pay"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "register_patient",
+      "observation": {
+        "ok": true,
+        "saved": true,
+        "patient": "New Patient EF98",
+        "profile": {
+          "first_name": "Sam",
+          "last_name": "Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance_provider": "self-pay",
+          "insurance_member_id": null
+        },
+        "next_step": "Registered. Offer to verify their insurance (verify_insurance) unless self-pay, then help them book."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Thanks, Sam. Your details are saved, and since you're self-pay, there's no insurance check needed. When would you like your 30-minute appointment? You can give me a day or time of day (morning or afternoon), or I can show you the earliest openings.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Thanks, Sam. Your details are saved, and since you're self-pay, there's no insurance check needed. When would you like your 30-minute appointment? You can give me a day or time of day (morning or afternoon), or I can show you the earliest openings."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 9,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "Thanks, Sam. Your details are saved, and since you're self-pay, there's no insurance check needed. When would you like your 30-minute appointment? You can give me a day or time of day (morning or afternoon), or I can show you the earliest openings."
+    }
+  ],
+  "final_reply": "Thanks, Sam. Your details are saved, and since you're self-pay, there's no insurance check needed. When would you like your 30-minute appointment? You can give me a day or time of day (morning or afternoon), or I can show you the earliest openings.",
+  "stop_reason": "replied",
+  "seconds": 7.48,
+  "db_appointments_for_patient": []
+}

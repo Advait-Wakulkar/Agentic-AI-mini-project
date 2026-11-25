@@ -1,0 +1,98 @@
+{
+  "session": "e160466f",
+  "timestamp": "2026-11-24T15:53:00",
+  "llm": "ollama:qwen3:4b",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "faq",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient B171",
+  "user_message": "What do you need from me to register?",
+  "decision": {
+    "intent": "ask_info",
+    "intent_probs": {
+      "book": 0.033,
+      "ask_info": 0.9,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "ask_info",
+        "intent_probs": {
+          "book": 0.033,
+          "ask_info": 0.9,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "faq",
+      "reason": "intent=ask_info"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "faq",
+      "raw": "{\n  \"action\": \"reply\",\n  \"argument\": {\n    \"message\": \"To register as a new patient, I'll need your first name, last name, date of birth, phone number, email address, and insurance provider with member ID (or 'self-pay'). For the demo, please use a phone number between 555-0100 and 555-0199 and an email ending with @example.com. Let me know what you have ready!\"\n  }\n  }",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "To register as a new patient, I'll need your first name, last name, date of birth, phone number, email address, and insurance provider with member ID (or 'self-pay'). For the demo, please use a phone number between 555-0100 and 555-0199 and an email ending with @example.com. Let me know what you have ready!"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "faq",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "OUTPUT_GUARD",
+      "agent": "faq",
+      "passed": true
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "faq",
+      "stop_reason": "replied",
+      "reply": "To register as a new patient, I'll need your first name, last name, date of birth, phone number, email address, and insurance provider with member ID (or 'self-pay'). For the demo, please use a phone number between 555-0100 and 555-0199 and an email ending with @example.com. Let me know what you have ready!"
+    }
+  ],
+  "final_reply": "To register as a new patient, I'll need your first name, last name, date of birth, phone number, email address, and insurance provider with member ID (or 'self-pay'). For the demo, please use a phone number between 555-0100 and 555-0199 and an email ending with @example.com. Let me know what you have ready!",
+  "stop_reason": "replied",
+  "seconds": 12.91,
+  "db_appointments_for_patient": []
+}

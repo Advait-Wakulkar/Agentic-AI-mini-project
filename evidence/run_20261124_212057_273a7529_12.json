@@ -1,0 +1,236 @@
+{
+  "session": "273a7529",
+  "timestamp": "2026-11-24T21:20:57",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient 7DD8",
+  "user_message": "hi I'm new, Sam Example, born 1995-06-15, phone 555-0150, email sam@example.com, self-pay. could I get a cleaning tomorrow morning?",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "new-patient intake details"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"register_patient\", \"argument\": {\"first_name\": \"Sam\", \"last_name\": \"Example\", \"date_of_birth\": \"1995-06-15\", \"phone\": \"555-0150\", \"email\": \"sam@example.com\", \"insurance_provider\": \"self-pay\"}}",
+      "proposal": {
+        "action": "register_patient",
+        "argument": {
+          "first_name": "Sam",
+          "last_name": "Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance_provider": "self-pay"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "register_patient",
+      "observation": {
+        "ok": true,
+        "saved": true,
+        "patient": "New Patient 7DD8",
+        "profile": {
+          "first_name": "Sam",
+          "last_name": "Example",
+          "date_of_birth": "1995-06-15",
+          "phone": "555-0150",
+          "email": "sam@example.com",
+          "insurance_provider": "self-pay",
+          "insurance_member_id": null
+        },
+        "next_step": "Registered. Offer to verify their insurance (verify_insurance) unless self-pay, then help them book."
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_openings\", \"argument\": {\"date\": \"2026-11-25\", \"part_of_day\": \"morning\"}}",
+      "proposal": {
+        "action": "list_openings",
+        "argument": {
+          "date": "2026-11-25",
+          "part_of_day": "morning"
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_openings",
+      "observation": {
+        "ok": true,
+        "date": "2026-11-25",
+        "openings": [
+          {
+            "slot_id": "S-20261125-0900-P1",
+            "time": "09:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261125-0900-P2",
+            "time": "09:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261125-0900-P3",
+            "time": "09:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261125-0930-P2",
+            "time": "09:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261125-0930-P3",
+            "time": "09:30",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261125-1000-P1",
+            "time": "10:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261125-1000-P3",
+            "time": "10:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261125-1030-P2",
+            "time": "10:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261125-1030-P3",
+            "time": "10:30",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261125-1100-P1",
+            "time": "11:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261125-1100-P2",
+            "time": "11:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261125-1100-P3",
+            "time": "11:00",
+            "provider": "Dr. Okafor"
+          }
+        ],
+        "total_open": 14
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Thanks, Sam. You're now registered with us. Tomorrow morning (Wednesday, 25 November), these times are open for a cleaning with our hygienist, Dr. Okafor:\\n\\n- 09:00\\n- 10:00\\n- 11:00\\n\\nWhich time would you like? Once you choose, I'll send the booking request for staff approval.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Thanks, Sam. You're now registered with us. Tomorrow morning (Wednesday, 25 November), these times are open for a cleaning with our hygienist, Dr. Okafor:\n\n- 09:00\n- 10:00\n- 11:00\n\nWhich time would you like? Once you choose, I'll send the booking request for staff approval."
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "Thanks, Sam. You're now registered with us. Tomorrow morning (Wednesday, 25 November), these times are open for a cleaning with our hygienist, Dr. Okafor:\n\n- 09:00\n- 10:00\n- 11:00\n\nWhich time would you like? Once you choose, I'll send the booking request for staff approval."
+    }
+  ],
+  "final_reply": "Thanks, Sam. You're now registered with us. Tomorrow morning (Wednesday, 25 November), these times are open for a cleaning with our hygienist, Dr. Okafor:\n\n- 09:00\n- 10:00\n- 11:00\n\nWhich time would you like? Once you choose, I'll send the booking request for staff approval.",
+  "stop_reason": "replied",
+  "seconds": 9.36,
+  "db_appointments_for_patient": []
+}

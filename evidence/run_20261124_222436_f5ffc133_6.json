@@ -1,0 +1,112 @@
+{
+  "session": "f5ffc133",
+  "timestamp": "2026-11-24T22:24:36",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient A",
+  "user_message": "can you book my brother in too?",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"I'm sorry, but I can only book, change or cancel appointments for you, Avery. Your brother will need to contact the office himself to arrange his own visit.\\n\\nFor your own cleaning, the Monday 2026-11-30 opening at 10:00 AM with Dr. Okafor is still available. Would you like me to send that booking request for you? It won't be final until staff approve it.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "I'm sorry, but I can only book, change or cancel appointments for you, Avery. Your brother will need to contact the office himself to arrange his own visit.\n\nFor your own cleaning, the Monday 2026-11-30 opening at 10:00 AM with Dr. Okafor is still available. Would you like me to send that booking request for you? It won't be final until staff approve it."
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "I'm sorry, but I can only book, change or cancel appointments for you, Avery. Your brother will need to contact the office himself to arrange his own visit.\n\nFor your own cleaning, the Monday 2026-11-30 opening at 10:00 AM with Dr. Okafor is still available. Would you like me to send that booking request for you? It won't be final until staff approve it."
+    }
+  ],
+  "final_reply": "I'm sorry, but I can only book, change or cancel appointments for you, Avery. Your brother will need to contact the office himself to arrange his own visit.\n\nFor your own cleaning, the Monday 2026-11-30 opening at 10:00 AM with Dr. Okafor is still available. Would you like me to send that booking request for you? It won't be final until staff approve it.",
+  "stop_reason": "replied",
+  "seconds": 3.75,
+  "db_appointments_for_patient": [
+    {
+      "id": 116,
+      "slot_id": "S-20261125-1100-P3",
+      "date": "2026-11-25",
+      "time": "11:00",
+      "provider": "Dr. Okafor",
+      "patient_alias": "Test Patient A",
+      "reason": "Cleaning with Dr. Okafor, Wednesday 2026-11-25 at 11:00, requested by returning patient Avery Example",
+      "approval_id": 116,
+      "status": "booked",
+      "created_at": "2026-11-24T21:28:34",
+      "cancelled_at": null
+    }
+  ]
+}

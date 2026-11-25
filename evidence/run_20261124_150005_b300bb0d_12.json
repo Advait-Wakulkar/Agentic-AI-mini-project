@@ -1,0 +1,223 @@
+{
+  "session": "b300bb0d",
+  "timestamp": "2026-11-24T15:00:05",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "what's open friday morning? I don't mind who",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"list_openings\", \"argument\": {\"date\": \"2026-11-27\", \"part_of_day\": \"morning\"}}",
+      "proposal": {
+        "action": "list_openings",
+        "argument": {
+          "date": "2026-11-27",
+          "part_of_day": "morning"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "list_openings",
+      "observation": {
+        "ok": true,
+        "date": "2026-11-27",
+        "openings": [
+          {
+            "slot_id": "S-20261127-0900-P1",
+            "time": "09:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-0900-P2",
+            "time": "09:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-0900-P3",
+            "time": "09:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-0930-P2",
+            "time": "09:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1000-P1",
+            "time": "10:00",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-1000-P3",
+            "time": "10:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1030-P1",
+            "time": "10:30",
+            "provider": "Dr. Rivera"
+          },
+          {
+            "slot_id": "S-20261127-1030-P2",
+            "time": "10:30",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1030-P3",
+            "time": "10:30",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1100-P2",
+            "time": "11:00",
+            "provider": "Dr. Chen"
+          },
+          {
+            "slot_id": "S-20261127-1100-P3",
+            "time": "11:00",
+            "provider": "Dr. Okafor"
+          },
+          {
+            "slot_id": "S-20261127-1130-P2",
+            "time": "11:30",
+            "provider": "Dr. Chen"
+          }
+        ],
+        "total_open": 13
+      }
+    },
+    {
+      "step": 6,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Friday 2026-11-27 has several morning openings. Here are three:\\n\\n1. 09:00 with Dr. Rivera\\n2. 10:30 with Dr. Chen\\n3. 11:00 with Dr. Okafor (hygienist)\\n\\nThere are more times between 09:00 and 11:30 if none of these work. Which one would you like? Once you choose, I'll send the booking request to the office for staff approval. It isn't confirmed until they approve it.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Friday 2026-11-27 has several morning openings. Here are three:\n\n1. 09:00 with Dr. Rivera\n2. 10:30 with Dr. Chen\n3. 11:00 with Dr. Okafor (hygienist)\n\nThere are more times between 09:00 and 11:30 if none of these work. Which one would you like? Once you choose, I'll send the booking request to the office for staff approval. It isn't confirmed until they approve it."
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 8,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": false,
+      "observation": {
+        "ok": false,
+        "rejected": true,
+        "errors": [
+          "check 'grounded_reply': your reply says an appointment is booked, but nothing was approved, saved and verified in this turn. Rewrite the reply."
+        ]
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Here are some openings on Friday 2026-11-27 morning:\\n\\n1. 09:00 with Dr. Rivera\\n2. 10:30 with Dr. Chen\\n3. 11:00 with Dr. Okafor (hygienist)\\n\\nThere are more times between 09:00 and 11:30. Which one would you like? I can then send a request to the office for approval. Nothing is final until staff approve it.\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Here are some openings on Friday 2026-11-27 morning:\n\n1. 09:00 with Dr. Rivera\n2. 10:30 with Dr. Chen\n3. 11:00 with Dr. Okafor (hygienist)\n\nThere are more times between 09:00 and 11:30. Which one would you like? I can then send a request to the office for approval. Nothing is final until staff approve it."
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "replied",
+      "reply": "Here are some openings on Friday 2026-11-27 morning:\n\n1. 09:00 with Dr. Rivera\n2. 10:30 with Dr. Chen\n3. 11:00 with Dr. Okafor (hygienist)\n\nThere are more times between 09:00 and 11:30. Which one would you like? I can then send a request to the office for approval. Nothing is final until staff approve it."
+    }
+  ],
+  "final_reply": "Here are some openings on Friday 2026-11-27 morning:\n\n1. 09:00 with Dr. Rivera\n2. 10:30 with Dr. Chen\n3. 11:00 with Dr. Okafor (hygienist)\n\nThere are more times between 09:00 and 11:30. Which one would you like? I can then send a request to the office for approval. Nothing is final until staff approve it.",
+  "stop_reason": "replied",
+  "seconds": 11.76,
+  "db_appointments_for_patient": []
+}

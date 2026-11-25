@@ -9,3 +9,7 @@ node_modules/
 *.tsbuildinfo
 .DS_Store
 frontend/.env*
+
+# docs toolchain (rebuild with docs/README)
+docs/.venv/
+docs/node_modules/

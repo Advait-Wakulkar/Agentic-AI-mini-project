@@ -7,6 +7,8 @@ import type { Step } from "@/lib/api";
 
 const KIND_STYLE: Record<string, { label: string; cls: string }> = {
   DECIDER: { label: "Decider", cls: "bg-panel-2 text-muted" },
+  ROUTER: { label: "Router", cls: "bg-accent-soft text-accent" },
+  HANDOFF: { label: "Hand-off", cls: "bg-accent-soft text-accent" },
   MODEL_PROPOSED: { label: "Model proposed", cls: "bg-accent-soft text-accent" },
   VALIDATION: { label: "Validation", cls: "bg-good-soft text-good" },
   TOOL_OBSERVATION: { label: "Observation", cls: "bg-panel-2 text-muted" },
@@ -47,6 +49,10 @@ function StepBody({ s }: { s: Step }) {
         </div>
       );
     }
+    case "ROUTER":
+      return <div className="text-xs">→ <b>{String(s.to_agent)} agent</b> <span className="text-muted">({String(s.reason)})</span></div>;
+    case "HANDOFF":
+      return <div className="text-xs"><b>{String(s.from_agent)}</b> agent handed off to <b>{String(s.to_agent)}</b> agent</div>;
     case "MODEL_PROPOSED": {
       const p = s.proposal as { action?: string; argument?: Record<string, unknown> } | null;
       if (!p) return <div className="font-mono text-xs text-bad">unparseable: {String(s.raw).slice(0, 200)}</div>;
@@ -67,11 +73,36 @@ function StepBody({ s }: { s: Step }) {
           ))}
         </ul>
       );
-    case "TOOL_OBSERVATION":
+    case "TOOL_OBSERVATION": {
+      const o = s.observation as Record<string, unknown> | undefined;
+      if (o && o.simulated) {
+        // The simulated insurance check: show what the tool "did", then the raw result.
+        return (
+          <div className="mt-1 text-xs">
+            <div className="text-muted">{String(o.service)}</div>
+            <ol className="mt-1 list-decimal pl-4">
+              {((o.steps as string[]) ?? []).map((st) => <li key={st}>{st}</li>)}
+            </ol>
+            <div className="mt-1">
+              Result: <b>{String(o.status ?? (o.ok ? "ok" : "error"))}</b>
+              {o.plan ? <> · {String(o.plan)}</> : null}
+              {o.in_network === true && <> · in network</>}
+              {o.in_network === false && <> · out of network</>}
+              {o.reference ? <span className="text-muted"> · ref {String(o.reference)}</span> : null}
+            </div>
+            <Json value={o} />
+          </div>
+        );
+      }
       return <Json value={s.observation} />;
+    }
     case "APPROVAL_REQUESTED": {
       const r = s.request as Record<string, string>;
-      return <div className="text-xs">{r.date} {r.time} · {r.provider} · slot <span className="font-mono">{r.slot_id}</span></div>;
+      return (
+        <div className="text-xs">
+          <b>{r.action ?? "book"}</b> · {r.date} {r.time} · {r.provider} · queued as request #{String(s.request_id)}
+        </div>
+      );
     }
     case "HUMAN_DECISION":
       return (

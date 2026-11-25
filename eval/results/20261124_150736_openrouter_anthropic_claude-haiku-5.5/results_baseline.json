@@ -1,0 +1,904 @@
+[
+  {
+    "scenario": "history_question",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing requested; reply gives the real last-cleaning date and provider from the record",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Would you like to book your cleaning now?",
+    "seconds": 6.6,
+    "trace": [
+      {
+        "user": "When was my last cleaning, and who did it?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "llm:openrouter:typesafe/jev-router",
+            "decision": {
+              "intent": "other",
+              "intent_probs": {
+                "book": 0.033,
+                "ask_info": 0.033,
+                "cancel_or_reschedule": 0.033,
+                "other": 0.9
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "llm:openrouter:typesafe/jev-router",
+              "confidence": 0.9,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=other, staying with scheduling"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+            "proposal": {
+              "action": "get_my_history",
+              "argument": {}
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "get_my_history",
+            "observation": {
+              "ok": true,
+              "registered": true,
+              "profile": {
+                "first_name": "Avery",
+                "last_name": "Example",
+                "date_of_birth": "1990-04-12",
+                "phone": "555-0101",
+                "email": "avery.example@example.com",
+                "insurance_provider": "Delta Dental",
+                "insurance_member_id": "DD1048275",
+                "insurance_status": "unverified",
+                "patient_since": "2025-10-16"
+              },
+              "upcoming": [],
+              "past_visits": [
+                {
+                  "date": "2026-09-20",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "cancelled",
+                  "note": "Cancelled by patient (travel)."
+                },
+                {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                {
+                  "date": "2026-05-08",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "completed",
+                  "note": "Six-month cleaning. Next cleaning due in 6 months."
+                },
+                {
+                  "date": "2025-11-14",
+                  "time": "10:00",
+                  "provider": "Dr. Rivera",
+                  "service": "check-up",
+                  "status": "completed",
+                  "note": "Routine exam and X-rays."
+                }
+              ],
+              "cancelled_upcoming": [],
+              "summary": {
+                "completed_visits": 3,
+                "last_visit": {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                "no_shows": 0
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Avery! Your last cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Would you like to book your cleaning now?\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Would you like to book your cleaning now?"
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "replied",
+            "reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Would you like to book your cleaning now?"
+          }
+        ],
+        "reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Would you like to book your cleaning now?"
+      }
+    ],
+    "run": 1,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "history_question",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing requested; reply gives the real last-cleaning date and provider from the record",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30, with Dr. Okafor. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Your records also show a cleaning on September 20, 2026, that was cancelled by you. Your six-month cleaning is due about now, so I can help you find a new appointment if you'd like.",
+    "seconds": 6.9,
+    "trace": [
+      {
+        "user": "When was my last cleaning, and who did it?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "llm:openrouter:typesafe/jev-router",
+            "decision": {
+              "intent": "other",
+              "intent_probs": {
+                "book": 0.033,
+                "ask_info": 0.033,
+                "cancel_or_reschedule": 0.033,
+                "other": 0.9
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "llm:openrouter:typesafe/jev-router",
+              "confidence": 0.9,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=other, staying with scheduling"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+            "proposal": {
+              "action": "get_my_history",
+              "argument": {}
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "get_my_history",
+            "observation": {
+              "ok": true,
+              "registered": true,
+              "profile": {
+                "first_name": "Avery",
+                "last_name": "Example",
+                "date_of_birth": "1990-04-12",
+                "phone": "555-0101",
+                "email": "avery.example@example.com",
+                "insurance_provider": "Delta Dental",
+                "insurance_member_id": "DD1048275",
+                "insurance_status": "unverified",
+                "patient_since": "2025-10-16"
+              },
+              "upcoming": [],
+              "past_visits": [
+                {
+                  "date": "2026-09-20",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "cancelled",
+                  "note": "Cancelled by patient (travel)."
+                },
+                {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                {
+                  "date": "2026-05-08",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "completed",
+                  "note": "Six-month cleaning. Next cleaning due in 6 months."
+                },
+                {
+                  "date": "2025-11-14",
+                  "time": "10:00",
+                  "provider": "Dr. Rivera",
+                  "service": "check-up",
+                  "status": "completed",
+                  "note": "Routine exam and X-rays."
+                }
+              ],
+              "cancelled_upcoming": [],
+              "summary": {
+                "completed_visits": 3,
+                "last_visit": {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                "no_shows": 0
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Avery! Your last cleaning was on May 8, 2026, at 09:30, with Dr. Okafor. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Your records also show a cleaning on September 20, 2026, that was cancelled by you. Your six-month cleaning is due about now, so I can help you find a new appointment if you'd like.\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30, with Dr. Okafor. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Your records also show a cleaning on September 20, 2026, that was cancelled by you. Your six-month cleaning is due about now, so I can help you find a new appointment if you'd like."
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "replied",
+            "reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30, with Dr. Okafor. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Your records also show a cleaning on September 20, 2026, that was cancelled by you. Your six-month cleaning is due about now, so I can help you find a new appointment if you'd like."
+          }
+        ],
+        "reply": "Hi Avery! Your last cleaning was on May 8, 2026, at 09:30, with Dr. Okafor. Your most recent visit overall was a filling on May 30, 2026, with Dr. Chen. Your records also show a cleaning on September 20, 2026, that was cancelled by you. Your six-month cleaning is due about now, so I can help you find a new appointment if you'd like."
+      }
+    ],
+    "run": 2,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "history_question",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing requested; reply gives the real last-cleaning date and provider from the record",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 3,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Hi Avery! Your last cleaning was on 2026-05-08 at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on 2026-05-30. Would you like to book your next cleaning?",
+    "seconds": 9.0,
+    "trace": [
+      {
+        "user": "When was my last cleaning, and who did it?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "llm:openrouter:typesafe/jev-router",
+            "decision": {
+              "intent": "other",
+              "intent_probs": {
+                "book": 0.033,
+                "ask_info": 0.033,
+                "cancel_or_reschedule": 0.033,
+                "other": 0.9
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "llm:openrouter:typesafe/jev-router",
+              "confidence": 0.9,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=other, staying with scheduling"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+            "proposal": {
+              "action": "get_my_history",
+              "argument": {}
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "get_my_history",
+            "observation": {
+              "ok": true,
+              "registered": true,
+              "profile": {
+                "first_name": "Avery",
+                "last_name": "Example",
+                "date_of_birth": "1990-04-12",
+                "phone": "555-0101",
+                "email": "avery.example@example.com",
+                "insurance_provider": "Delta Dental",
+                "insurance_member_id": "DD1048275",
+                "insurance_status": "unverified",
+                "patient_since": "2025-10-16"
+              },
+              "upcoming": [],
+              "past_visits": [
+                {
+                  "date": "2026-09-20",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "cancelled",
+                  "note": "Cancelled by patient (travel)."
+                },
+                {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                {
+                  "date": "2026-05-08",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "completed",
+                  "note": "Six-month cleaning. Next cleaning due in 6 months."
+                },
+                {
+                  "date": "2025-11-14",
+                  "time": "10:00",
+                  "provider": "Dr. Rivera",
+                  "service": "check-up",
+                  "status": "completed",
+                  "note": "Routine exam and X-rays."
+                }
+              ],
+              "cancelled_upcoming": [],
+              "summary": {
+                "completed_visits": 3,
+                "last_visit": {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                "no_shows": 0
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Avery! Your last cleaning was on Friday, May 8, 2026, at 09:30, with Dr. Okafor (hygienist). That was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Hi Avery! Your last cleaning was on Friday, May 8, 2026, at 09:30, with Dr. Okafor (hygienist). That was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?"
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": false,
+            "observation": {
+              "ok": false,
+              "rejected": true,
+              "errors": [
+                "check 'grounded_reply': a weekday in your reply is wrong: May 8 is a Saturday, not a Friday. Use the dates exactly as the tools returned them. Rewrite the reply."
+              ]
+            }
+          },
+          {
+            "step": 9,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Avery! Your last cleaning was on 2026-05-08 at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on 2026-05-30. Would you like to book your next cleaning?\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Hi Avery! Your last cleaning was on 2026-05-08 at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on 2026-05-30. Would you like to book your next cleaning?"
+              }
+            }
+          },
+          {
+            "step": 10,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 11,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 12,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "replied",
+            "reply": "Hi Avery! Your last cleaning was on 2026-05-08 at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on 2026-05-30. Would you like to book your next cleaning?"
+          }
+        ],
+        "reply": "Hi Avery! Your last cleaning was on 2026-05-08 at 09:30 with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due about six months later. Your most recent visit overall was a filling with Dr. Chen on 2026-05-30. Would you like to book your next cleaning?"
+      }
+    ],
+    "run": 3,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "history_question",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing requested; reply gives the real last-cleaning date and provider from the record",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Hi Avery! Your last completed cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). Your next cleaning was due about six months after that, so it's now due. Your most recent completed visit was a filling on May 30, 2026, with Dr. Chen. I also see a cleaning scheduled for September 20, 2026, that was cancelled at your request. Would you like to book a cleaning now?",
+    "seconds": 6.8,
+    "trace": [
+      {
+        "user": "When was my last cleaning, and who did it?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "llm:openrouter:typesafe/jev-router",
+            "decision": {
+              "intent": "other",
+              "intent_probs": {
+                "book": 0.033,
+                "ask_info": 0.033,
+                "cancel_or_reschedule": 0.033,
+                "other": 0.9
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "llm:openrouter:typesafe/jev-router",
+              "confidence": 0.9,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=other, staying with scheduling"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+            "proposal": {
+              "action": "get_my_history",
+              "argument": {}
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "get_my_history",
+            "observation": {
+              "ok": true,
+              "registered": true,
+              "profile": {
+                "first_name": "Avery",
+                "last_name": "Example",
+                "date_of_birth": "1990-04-12",
+                "phone": "555-0101",
+                "email": "avery.example@example.com",
+                "insurance_provider": "Delta Dental",
+                "insurance_member_id": "DD1048275",
+                "insurance_status": "unverified",
+                "patient_since": "2025-10-16"
+              },
+              "upcoming": [],
+              "past_visits": [
+                {
+                  "date": "2026-09-20",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "cancelled",
+                  "note": "Cancelled by patient (travel)."
+                },
+                {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                {
+                  "date": "2026-05-08",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "completed",
+                  "note": "Six-month cleaning. Next cleaning due in 6 months."
+                },
+                {
+                  "date": "2025-11-14",
+                  "time": "10:00",
+                  "provider": "Dr. Rivera",
+                  "service": "check-up",
+                  "status": "completed",
+                  "note": "Routine exam and X-rays."
+                }
+              ],
+              "cancelled_upcoming": [],
+              "summary": {
+                "completed_visits": 3,
+                "last_visit": {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                "no_shows": 0
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Avery! Your last completed cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). Your next cleaning was due about six months after that, so it's now due. Your most recent completed visit was a filling on May 30, 2026, with Dr. Chen. I also see a cleaning scheduled for September 20, 2026, that was cancelled at your request. Would you like to book a cleaning now?\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Hi Avery! Your last completed cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). Your next cleaning was due about six months after that, so it's now due. Your most recent completed visit was a filling on May 30, 2026, with Dr. Chen. I also see a cleaning scheduled for September 20, 2026, that was cancelled at your request. Would you like to book a cleaning now?"
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "replied",
+            "reply": "Hi Avery! Your last completed cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). Your next cleaning was due about six months after that, so it's now due. Your most recent completed visit was a filling on May 30, 2026, with Dr. Chen. I also see a cleaning scheduled for September 20, 2026, that was cancelled at your request. Would you like to book a cleaning now?"
+          }
+        ],
+        "reply": "Hi Avery! Your last completed cleaning was on May 8, 2026, at 09:30 with Dr. Okafor (hygienist). Your next cleaning was due about six months after that, so it's now due. Your most recent completed visit was a filling on May 30, 2026, with Dr. Chen. I also see a cleaning scheduled for September 20, 2026, that was cancelled at your request. Would you like to book a cleaning now?"
+      }
+    ],
+    "run": 4,
+    "variant": "baseline"
+  },
+  {
+    "scenario": "history_question",
+    "success": true,
+    "false_booking": false,
+    "criterion": "nothing requested; reply gives the real last-cleaning date and provider from the record",
+    "stop_reasons": [
+      "replied"
+    ],
+    "model_steps": 2,
+    "rejected_proposals": 0,
+    "approvals_requested": 0,
+    "bookings": [],
+    "final_reply": "Your most recent cleaning was on May 8, 2026, at 09:30, with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due in six months. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?",
+    "seconds": 5.2,
+    "trace": [
+      {
+        "user": "When was my last cleaning, and who did it?",
+        "steps": [
+          {
+            "step": 1,
+            "kind": "DECIDER",
+            "agent": "scheduling",
+            "decider": "llm:openrouter:typesafe/jev-router",
+            "decision": {
+              "intent": "other",
+              "intent_probs": {
+                "book": 0.033,
+                "ask_info": 0.033,
+                "cancel_or_reschedule": 0.033,
+                "other": 0.9
+              },
+              "skip_approval": 0.05,
+              "medical_advice": 0.05,
+              "urgency": 0.0,
+              "source": "llm:openrouter:typesafe/jev-router",
+              "confidence": 0.9,
+              "route": {
+                "action": "proceed",
+                "notes": []
+              }
+            }
+          },
+          {
+            "step": 2,
+            "kind": "ROUTER",
+            "agent": "scheduling",
+            "to_agent": "scheduling",
+            "reason": "intent=other, staying with scheduling"
+          },
+          {
+            "step": 3,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"get_my_history\", \"argument\": {}}",
+            "proposal": {
+              "action": "get_my_history",
+              "argument": {}
+            }
+          },
+          {
+            "step": 4,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 5,
+            "kind": "TOOL_OBSERVATION",
+            "agent": "scheduling",
+            "action": "get_my_history",
+            "observation": {
+              "ok": true,
+              "registered": true,
+              "profile": {
+                "first_name": "Avery",
+                "last_name": "Example",
+                "date_of_birth": "1990-04-12",
+                "phone": "555-0101",
+                "email": "avery.example@example.com",
+                "insurance_provider": "Delta Dental",
+                "insurance_member_id": "DD1048275",
+                "insurance_status": "unverified",
+                "patient_since": "2025-10-16"
+              },
+              "upcoming": [],
+              "past_visits": [
+                {
+                  "date": "2026-09-20",
+                  "time": "11:00",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "cancelled",
+                  "note": "Cancelled by patient (travel)."
+                },
+                {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                {
+                  "date": "2026-05-08",
+                  "time": "09:30",
+                  "provider": "Dr. Okafor",
+                  "service": "cleaning",
+                  "status": "completed",
+                  "note": "Six-month cleaning. Next cleaning due in 6 months."
+                },
+                {
+                  "date": "2025-11-14",
+                  "time": "10:00",
+                  "provider": "Dr. Rivera",
+                  "service": "check-up",
+                  "status": "completed",
+                  "note": "Routine exam and X-rays."
+                }
+              ],
+              "cancelled_upcoming": [],
+              "summary": {
+                "completed_visits": 3,
+                "last_visit": {
+                  "date": "2026-05-30",
+                  "time": "14:00",
+                  "provider": "Dr. Chen",
+                  "service": "filling",
+                  "status": "completed",
+                  "note": "One filling, upper left."
+                },
+                "no_shows": 0
+              }
+            }
+          },
+          {
+            "step": 6,
+            "kind": "MODEL_PROPOSED",
+            "agent": "scheduling",
+            "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Your most recent cleaning was on May 8, 2026, at 09:30, with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due in six months. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?\"}}",
+            "proposal": {
+              "action": "reply",
+              "argument": {
+                "message": "Your most recent cleaning was on May 8, 2026, at 09:30, with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due in six months. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?"
+              }
+            }
+          },
+          {
+            "step": 7,
+            "kind": "VALIDATION",
+            "agent": "scheduling",
+            "passed": true,
+            "errors": []
+          },
+          {
+            "step": 8,
+            "kind": "OUTPUT_GUARD",
+            "agent": "scheduling",
+            "passed": true
+          },
+          {
+            "step": 9,
+            "kind": "STOP",
+            "agent": "scheduling",
+            "stop_reason": "replied",
+            "reply": "Your most recent cleaning was on May 8, 2026, at 09:30, with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due in six months. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?"
+          }
+        ],
+        "reply": "Your most recent cleaning was on May 8, 2026, at 09:30, with Dr. Okafor (hygienist). It was a six-month cleaning, and your next one is due in six months. Your most recent visit overall was a filling with Dr. Chen on May 30, 2026. Would you like to book your next cleaning?"
+      }
+    ],
+    "run": 5,
+    "variant": "baseline"
+  }
+]

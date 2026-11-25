@@ -1,0 +1,223 @@
+{
+  "session": "b300bb0d",
+  "timestamp": "2026-11-24T15:09:30",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "Test Patient C",
+  "user_message": "the first one",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "intent=book"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "\n{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261127-0900-P1\", \"reason\": \"Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera.\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261127-0900-P1",
+          "reason": "Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera."
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261127-0900-P1",
+        "date": "2026-11-27",
+        "time": "09:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient C",
+        "reason": "Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera.",
+        "patient_request": "the first one",
+        "patient_profile": {
+          "name": "Casey Placeholder",
+          "date_of_birth": "2001-01-15",
+          "phone": "555-0103",
+          "email": "casey.placeholder@example.com",
+          "insurance": "self-pay",
+          "insurance_status": "unverified",
+          "new_patient": false
+        }
+      },
+      "request_id": 2
+    },
+    {
+      "step": 6,
+      "kind": "HUMAN_DECISION",
+      "agent": "scheduling",
+      "approved": true,
+      "channel": "staff:demo",
+      "approval_id": 114,
+      "request": {
+        "slot_id": "S-20261127-0900-P1",
+        "date": "2026-11-27",
+        "time": "09:00",
+        "provider": "Dr. Rivera",
+        "patient_alias": "Test Patient C",
+        "reason": "Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera.",
+        "patient_request": "the first one",
+        "patient_profile": {
+          "name": "Casey Placeholder",
+          "date_of_birth": "2001-01-15",
+          "phone": "555-0103",
+          "email": "casey.placeholder@example.com",
+          "insurance": "self-pay",
+          "insurance_status": "unverified",
+          "new_patient": false
+        }
+      }
+    },
+    {
+      "step": 7,
+      "kind": "VERIFY",
+      "agent": "scheduling",
+      "action": "book",
+      "saved": {
+        "ok": true
+      },
+      "verified": true,
+      "slot_id": "S-20261127-0900-P1"
+    },
+    {
+      "step": 8,
+      "kind": "TOOL_OBSERVATION",
+      "agent": "scheduling",
+      "action": "book_appointment",
+      "observation": {
+        "ok": true,
+        "approved": true,
+        "verified": true,
+        "action": "book",
+        "request": {
+          "slot_id": "S-20261127-0900-P1",
+          "date": "2026-11-27",
+          "time": "09:00",
+          "provider": "Dr. Rivera",
+          "patient_alias": "Test Patient C",
+          "reason": "Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera.",
+          "patient_request": "the first one",
+          "patient_profile": {
+            "name": "Casey Placeholder",
+            "date_of_birth": "2001-01-15",
+            "phone": "555-0103",
+            "email": "casey.placeholder@example.com",
+            "insurance": "self-pay",
+            "insurance_status": "unverified",
+            "new_patient": false
+          }
+        }
+      }
+    },
+    {
+      "step": 9,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"reply\", \"argument\": {\"message\": \"Hi Casey, your appointment is booked for Friday 2026-11-27 at 09:00 with Dr. Rivera. The booking is verified. Is there anything else I can help with?\"}}",
+      "proposal": {
+        "action": "reply",
+        "argument": {
+          "message": "Hi Casey, your appointment is booked for Friday 2026-11-27 at 09:00 with Dr. Rivera. The booking is verified. Is there anything else I can help with?"
+        }
+      }
+    },
+    {
+      "step": 10,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 11,
+      "kind": "OUTPUT_GUARD",
+      "agent": "scheduling",
+      "passed": true
+    },
+    {
+      "step": 12,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "booked_verified",
+      "reply": "Hi Casey, your appointment is booked for Friday 2026-11-27 at 09:00 with Dr. Rivera. The booking is verified. Is there anything else I can help with?"
+    }
+  ],
+  "final_reply": "Hi Casey, your appointment is booked for Friday 2026-11-27 at 09:00 with Dr. Rivera. The booking is verified. Is there anything else I can help with?",
+  "stop_reason": "booked_verified",
+  "seconds": 549.07,
+  "db_appointments_for_patient": [
+    {
+      "id": 114,
+      "slot_id": "S-20261127-0900-P1",
+      "date": "2026-11-27",
+      "time": "09:00",
+      "provider": "Dr. Rivera",
+      "patient_alias": "Test Patient C",
+      "reason": "Patient requested the 09:00 Friday 2026-11-27 morning opening with Dr. Rivera.",
+      "approval_id": 114,
+      "status": "booked",
+      "created_at": "2026-11-24T15:09:28",
+      "cancelled_at": null
+    }
+  ]
+}
