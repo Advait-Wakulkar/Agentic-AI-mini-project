@@ -1,0 +1,117 @@
+{
+  "session": "67726bff",
+  "timestamp": "2026-11-24T21:38:10",
+  "llm": "openrouter:anthropic/claude-haiku-5.5",
+  "decider": "llm:openrouter:typesafe/jev-router (rules as backup)",
+  "agent": "scheduling",
+  "prompt_variant": "baseline",
+  "today": "2026-11-24",
+  "patient_alias": "New Patient C8A6",
+  "user_message": "the 10 with the hygienist please",
+  "decision": {
+    "intent": "book",
+    "intent_probs": {
+      "book": 0.9,
+      "ask_info": 0.033,
+      "cancel_or_reschedule": 0.033,
+      "other": 0.033
+    },
+    "skip_approval": 0.05,
+    "medical_advice": 0.05,
+    "urgency": 0.0,
+    "source": "llm:openrouter:typesafe/jev-router",
+    "confidence": 0.9,
+    "route": {
+      "action": "proceed",
+      "notes": []
+    }
+  },
+  "steps": [
+    {
+      "step": 1,
+      "kind": "DECIDER",
+      "agent": "scheduling",
+      "decider": "llm:openrouter:typesafe/jev-router",
+      "decision": {
+        "intent": "book",
+        "intent_probs": {
+          "book": 0.9,
+          "ask_info": 0.033,
+          "cancel_or_reschedule": 0.033,
+          "other": 0.033
+        },
+        "skip_approval": 0.05,
+        "medical_advice": 0.05,
+        "urgency": 0.0,
+        "source": "llm:openrouter:typesafe/jev-router",
+        "confidence": 0.9,
+        "route": {
+          "action": "proceed",
+          "notes": []
+        }
+      }
+    },
+    {
+      "step": 2,
+      "kind": "ROUTER",
+      "agent": "scheduling",
+      "to_agent": "scheduling",
+      "reason": "patient picked an offered time"
+    },
+    {
+      "step": 3,
+      "kind": "MODEL_PROPOSED",
+      "agent": "scheduling",
+      "raw": "{\"action\": \"book_appointment\", \"argument\": {\"slot_id\": \"S-20261127-1000-P3\", \"reason\": \"Cleaning with hygienist Dr. Okafor, Friday 2026-11-27 at 10:00, new patient Advait Wakulkar (self-pay)\"}}",
+      "proposal": {
+        "action": "book_appointment",
+        "argument": {
+          "slot_id": "S-20261127-1000-P3",
+          "reason": "Cleaning with hygienist Dr. Okafor, Friday 2026-11-27 at 10:00, new patient Advait Wakulkar (self-pay)"
+        }
+      }
+    },
+    {
+      "step": 4,
+      "kind": "VALIDATION",
+      "agent": "scheduling",
+      "passed": true,
+      "errors": []
+    },
+    {
+      "step": 5,
+      "kind": "APPROVAL_REQUESTED",
+      "agent": "scheduling",
+      "request": {
+        "slot_id": "S-20261127-1000-P3",
+        "date": "2026-11-27",
+        "time": "10:00",
+        "provider": "Dr. Okafor",
+        "patient_alias": "New Patient C8A6",
+        "reason": "Cleaning with hygienist Dr. Okafor, Friday 2026-11-27 at 10:00, new patient Advait Wakulkar (self-pay)",
+        "patient_request": "the 10 with the hygienist please",
+        "patient_profile": {
+          "name": "Advait Wakulkar",
+          "date_of_birth": "2001-08-19",
+          "phone": "555-0100",
+          "email": "[real contact redacted]",
+          "insurance": "self-pay",
+          "insurance_status": "self_pay",
+          "new_patient": true
+        }
+      },
+      "request_id": 4
+    },
+    {
+      "step": 6,
+      "kind": "STOP",
+      "agent": "scheduling",
+      "stop_reason": "awaiting_approval",
+      "reply": "I've sent 2026-11-27 at 10:00 with Dr. Okafor to our staff for approval. I'll update you here once they decide."
+    }
+  ],
+  "final_reply": "I've sent 2026-11-27 at 10:00 with Dr. Okafor to our staff for approval. I'll update you here once they decide.",
+  "stop_reason": "awaiting_approval",
+  "seconds": 5.09,
+  "db_appointments_for_patient": []
+}

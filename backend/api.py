@@ -17,7 +17,7 @@ import threading
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend import auth, config, db, notify, reminders, tools
 from backend.agent import Session, resume_turn, run_turn
@@ -34,6 +34,7 @@ def _db_unavailable(_: Request, exc: db.DatabaseError):
 
 
 _lock = threading.Lock()                     # one agent turn at a time on the shared database connection
+_events_lock = threading.Lock()              # patient-update list: staff appends while the chat polls (review)
 _init_lock = threading.Lock()                # the UI fires several requests at once on page load
 _state: dict = {"conn": None, "sessions": {}, "llm": None, "decider": None}
 
@@ -107,7 +108,7 @@ class NewSession(BaseModel):
 
 class ChatIn(BaseModel):
     session_id: str
-    message: str
+    message: str = Field(max_length=4000)        # (review: no length cap)
 
 
 class DecideIn(BaseModel):
@@ -194,7 +195,8 @@ def chat(body: ChatIn, user=Depends(auth.current_user)):
 def session_events(session_id: str, user=Depends(auth.current_user)):
     """Patient chat polls this while a request waits for staff: replies that arrived after a staff decision."""
     session = _session(session_id, user)
-    events, session.events = session.events, []
+    with _events_lock:
+        events, session.events = session.events, []
     return {"pending": session.pending["request"] if session.pending else None, "events": events}
 
 
@@ -256,10 +258,15 @@ def staff_decide(request_id: int, body: DecideIn, staff=Depends(_require_staff))
             raise HTTPException(404, "No such request.")
         if row["status"] != "pending":
             raise HTTPException(409, f"This request was already {row['status']}.")
+        if body.approved and row["request"].get("date", "9999") < config.today().isoformat():
+            # (review: a request left pending for days could be approved and book a slot in the past)
+            tools.close_request(conn, request_id, "expired", who, None, "not_saved: the time has already passed")
+            raise HTTPException(409, "This appointment time has already passed; the request has expired.")
         session = _state["sessions"].get(row["session_id"])
         if session and session.pending and session.pending.get("request_id") == request_id:
             turn = resume_turn(session, body.approved, _llm(), decider_name=_decider().name, channel=who)
-            session.events.append(_turn_payload(session, turn))
+            with _events_lock:
+                session.events.append(_turn_payload(session, turn))
         else:
             result = tools.decide_and_apply(conn, row["request"], body.approved, who)
             tools.close_request(conn, request_id, "approved" if body.approved else "denied", who,

@@ -86,8 +86,15 @@ def _mentions_past_date(sentence: str, today: date) -> bool:
     return False
 
 
+def sentences(text: str) -> list[str]:
+    """Split into sentences without breaking at titles: "with Dr. Okafor" is not a sentence end.
+    (Found twice: by the demo, "the first one", and by the eval, a history reply's "cancelled" lost its date.)"""
+    protected = re.sub(r"\b(Dr|Mr|Mrs|Ms|St)\.(?=\s)", r"\1<DOT>", text)
+    return [x.replace("<DOT>", ".") for x in re.split(r"(?<=[.!?])\s+|\n+", protected) if x.strip()]
+
+
 def _claims(text: str, word: re.Pattern, today: Optional[date] = None) -> bool:
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+    for sentence in sentences(text):
         if word.search(sentence) and not _NOT_A_CLAIM.search(sentence):
             if re.search(r"\b(is|are) booked\b", sentence, re.I) and not re.search(r"\b(you|your)\b", sentence, re.I):
                 continue  # "Dr. Rivera is booked at 9:00" describes the schedule, not the patient's booking
@@ -529,7 +536,7 @@ def times_in(text: str) -> set[str]:
 
 
 def _claims_plan_accepted(text: str) -> bool:
-    for sentence in re.split(r"(?<=[.!?])\s+", text):
+    for sentence in sentences(text):
         if _PLAN_CLAIM.search(sentence) and _INSURANCE_CONTEXT.search(sentence) and not _NEGATION.search(sentence):
             return True
     return False
@@ -553,7 +560,7 @@ def _invented_phone(text: str, session: Optional[Session] = None) -> Optional[st
         profile = tools.get_profile(session.conn, session.patient_alias) or {}
         known += " " + (profile.get("phone") or "") + " " + _patient_said(session)
     known_digits = re.sub(r"\D", "", known)
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", text):
+    for sentence in sentences(text):
         # Eval: "use a number in the demo range (for example, 555-0142)" is an example for the patient, not a contact.
         example = _EXAMPLE_NUMBER.search(sentence)
         for m in _PHONE.findall(sentence) + _SHORT_PHONE.findall(sentence):
@@ -1040,8 +1047,15 @@ def _save_record(session: Session, turn: Turn, llm, decider_name: str) -> None:
         "db_appointments_for_patient": tools.list_appointments(session.conn, session.patient_alias),
     }
     path = config.EVIDENCE_DIR / f"run_{datetime.now():%Y%m%d_%H%M%S}_{session.id}_{len(turn.steps)}.json"
-    path.write_text(json.dumps(record, indent=2, default=str))
+    path.write_text(redact_real_contacts(json.dumps(record, indent=2, default=str)))
     turn.record_path = str(path)
+
+
+def redact_real_contacts(text: str) -> str:
+    """Run records are evidence that may be committed: never let an allowlisted REAL contact into them (review)."""
+    for contact in config.REAL_CONTACT_ALLOWLIST:
+        text = re.sub(re.escape(contact), "[real contact redacted]", text, flags=re.I)
+    return text
 
 
 def run_turn(session: Session, user_message: str, llm, decider, approver: Approver,

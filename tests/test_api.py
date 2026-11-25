@@ -117,7 +117,10 @@ def test_config_reports_missing_key_instead_of_failing(client, monkeypatch):
 
 USERS = {"tok-alice": {"id": "aaaaaaaa-1111-2222-3333-444444444444", "email": "alice@example.com"},
          "tok-bob": {"id": "bbbbbbbb-1111-2222-3333-444444444444", "email": "bob@example.com"},
-         "tok-staff": {"id": "cccccccc-1111-2222-3333-444444444444", "email": "staff@example.com"}}
+         "tok-staff": {"id": "cccccccc-1111-2222-3333-444444444444", "email": "staff@example.com",
+                       "email_confirmed_at": "2026-11-01T00:00:00Z"},
+         # Signed up with a staff address but never confirmed it (review: must NOT get staff rights)
+         "tok-fake-staff": {"id": "dddddddd-1111-2222-3333-444444444444", "email": "staff@example.com"}}
 
 
 @pytest.fixture
@@ -183,3 +186,8 @@ def test_rls_policies_exist_on_supabase(conn):
     appt = [p for p in policies if p["tablename"] == "appointments"]
     assert appt and "auth.uid()" in appt[0]["qual"]
     assert not [p for p in policies if p["tablename"] in ("approvals", "approval_requests")]  # never readable by browsers
+
+
+def test_unconfirmed_staff_email_is_not_staff(signed_in, client):
+    assert client.get("/api/staff/requests", headers=signed_in("fake-staff")).status_code == 403
+    assert client.get("/api/staff/requests", headers=signed_in("staff")).status_code == 200

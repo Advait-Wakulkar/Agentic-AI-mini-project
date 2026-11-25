@@ -174,7 +174,7 @@ def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -
     spec = ACTIONS[action]
     allowed = {**spec["required"], **spec["optional"]}
     for name, typ in spec["required"].items():
-        if name not in arg:
+        if arg.get(name) is None:      # missing, or null (review: {"message": null} crashed the loop)
             errors.append(f"check 'required_arg': '{action}' needs argument '{name}'.")
     for name, value in arg.items():
         if name not in allowed:
@@ -208,9 +208,11 @@ def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -
             errors.append("check 'slot_id_format': use a slot_id exactly as returned by a tool, e.g. S-20261124-0900-P1.")
         elif conn is not None and conn.one("SELECT 1 AS found FROM slots WHERE id = ?", (arg["slot_id"],)) is None:
             errors.append(f"check 'slot_exists': slot '{arg['slot_id']}' does not exist.")
-        if not arg["reason"].strip():
-            errors.append("check 'reason_nonempty': give a short visit reason, e.g. 'cleaning'.")
-    if "appointment_id" in arg and not str(arg["appointment_id"]).strip().isdigit():
+    if "reason" in spec["required"] and not str(arg["reason"]).strip():
+        # (all of book / cancel / reschedule: an empty reason could not be saved in the approvals audit row)
+        errors.append("check 'reason_nonempty': give a short reason, e.g. 'cleaning' or 'patient request'.")
+    if "appointment_id" in arg and not re.fullmatch(r"[0-9]{1,12}", str(arg["appointment_id"]).strip()):
+        # ASCII digits only (review: "²" passed isdigit() and then crashed int())
         errors.append("check 'appointment_id': use the numeric appointment_id from list_my_appointments.")
     if action == "transfer" and arg["to"] not in CHAT_AGENTS:
         errors.append(f"check 'transfer_target': 'to' must be one of {', '.join(CHAT_AGENTS)}.")
@@ -220,4 +222,9 @@ def validate(proposal: dict, today: date, conn=None, agent: str | None = None) -
         errors.append("check 'sms_length': keep the text under 300 characters.")
     if action == "send_email" and not arg["subject"].strip():
         errors.append("check 'subject_nonempty': give the email a short subject.")
+    if action == "send_email" and re.search(r"[\r\n]", arg["subject"]):
+        errors.append("check 'subject_one_line': the subject must be one line.")   # (review: header injection)
+    for name, value in arg.items():
+        if isinstance(value, str) and len(value) > 4000:
+            errors.append(f"check 'arg_length': '{name}' is too long.")
     return errors

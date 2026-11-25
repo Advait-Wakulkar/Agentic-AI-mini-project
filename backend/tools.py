@@ -458,12 +458,18 @@ def register_patient(conn, patient_alias: str, first_name: str, last_name: str, 
         problems["date_of_birth"] = "use YYYY-MM-DD, a real calendar date"
     # Fictional data only, except contact details the project owner allowlisted in .env for a live test.
     allowed = config.REAL_CONTACT_ALLOWLIST
-    phone_ok = _FICTIONAL_PHONE.match(values["phone"]) or re.sub(r"\D", "", values["phone"])[-10:] in {
-        re.sub(r"\D", "", a)[-10:] for a in allowed if re.sub(r"\D", "", a)}
+    allowed_phones = {re.sub(r"\D", "", a)[-10:] for a in allowed if "@" not in a and len(re.sub(r"\D", "", a)) >= 7}
+    phone_ok = _FICTIONAL_PHONE.match(values["phone"]) or re.sub(r"\D", "", values["phone"])[-10:] in allowed_phones
+    # (review: digits inside an allowlisted EMAIL used to count as an allowed phone number)
     if not phone_ok:
         problems["phone"] = "demo only: use a fictional number from 555-0100 to 555-0199"
     if not (_EMAIL_RE.match(values["email"]) or values["email"].lower() in allowed):
         problems["email"] = "demo only: use a made-up address ending in @example.com"
+    elif values["email"].lower() in allowed and conn.one(
+            "SELECT 1 AS taken FROM patients WHERE lower(email) = ? AND alias <> ? AND registered_at IS NOT NULL",
+            (values["email"].lower(), patient_alias)):
+        # (review: anyone could register with the owner's allowlisted address and route real email to them)
+        problems["email"] = "this real address is already registered to another patient; use a made-up @example.com one"
     self_pay = values["insurance_provider"].lower() in SELF_PAY
     if not values["insurance_provider"]:
         problems["insurance_provider"] = "give the insurance company, or 'self-pay'"
@@ -559,6 +565,8 @@ def send_calendar_invite(conn, patient_alias: str, appointment_id) -> dict:
     if appt is None:
         return {"ok": False, "error": f"Appointment {appointment_id} is not a booked appointment of this patient. "
                                       "Use list_my_appointments to see their appointments."}
+    if notify.recent_invite(conn, appt["id"]):
+        return {"ok": False, "error": "An invite for this appointment was sent a few minutes ago; check Messages."}
     appt = appointment_for_notice(conn, appt["id"])
     profile = get_profile(conn, patient_alias) or {}
     name = f"{profile.get('first_name') or ''} {profile.get('last_name') or ''}".strip() or patient_alias

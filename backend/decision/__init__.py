@@ -56,6 +56,8 @@ class Decision:
 def route(d: Decision, policy_name: str = "strict") -> dict:
     """Turn a Decision into one harness action plus notes for the LLM."""
     policy = POLICIES[policy_name]
+    if d.urgency >= EMERGENCY:
+        return {"action": "front_desk", "reason": "emergency"}
     if d.medical_advice >= policy["action_threshold"]:
         # Found in the demo run: a knocked-out tooth with heavy bleeding got the generic medical reply.
         return {"action": "front_desk", "reason": "emergency" if d.urgency >= 3 else "medical_advice"}
@@ -92,7 +94,18 @@ _SKIP = re.compile(r"(skip|without|no need for|don'?t need|bypass|ignore)\W+(the
 # "how much" alone is NOT medical ("how much is a cleaning?"); only medication / diagnosis wording is.
 _MED = re.compile(r"\b(how (much|many) (ibuprofen|advil|tylenol|aspirin|medicine|medication|painkillers?|pills?)|dose|dosage|\d+\s?mg|"
                   r"prescri\w*|antibiotics?|ibuprofen|painkillers?|should i take|diagnos\w*|is (it|my tooth) infected|what is wrong)\b", re.I)
-_URGENT = [(re.compile(r"\b(severe|unbearable|swollen|swelling|bleeding|broken|knocked out|abscess|emergency)\b", re.I), 3.0),
+# Red flags for a medical EMERGENCY (not just urgent dental care): always the emergency front-desk reply, never the AI.
+# Found by the edge battery: "my face is swelling up and I can't breathe properly" reached the agent, because the
+# front desk only took over for medical-ADVICE questions.
+EMERGENCY = 4.0
+_RED_FLAG = re.compile(r"(can'?t|cannot|can not|trouble|difficulty|hard to|struggling to)\s+(breath|swallow)|"
+                       r"\b(short(ness)? of breath|not breathing|choking|throat (is )?(closing|swelling|swollen)|"
+                       r"won'?t stop bleeding|bleeding (won'?t|will not|doesn'?t) stop|bleeding heavily|"
+                       r"passed out|fainted|unconscious|chest pain|anaphyla\w*|"
+                       r"(a lot of|lots of|so much|heavy) blood|knocked (a |my |out (a |my )?)?(tooth|teeth)( out)?)\b", re.I)
+_NOT_RED_FLAG = re.compile(r"\b(through (my|the) nose|stuffy|blocked nose|a cold|the cold|congest\w*)\b", re.I)
+_URGENT = [(_RED_FLAG, EMERGENCY),
+           (re.compile(r"\b(severe|unbearable|swollen|swelling|bleeding|broken|knocked out|abscess|emergency)\b", re.I), 3.0),
            (re.compile(r"\b(pain|hurts|toothache|ache|sensitive)\b", re.I), 2.0)]
 
 
@@ -112,6 +125,8 @@ class RuleDecider:
         probs = {k: round(v / total, 3) for k, v in scores.items()}
         intent = max(probs, key=probs.get)
         urgency = next((lvl for rx, lvl in _URGENT if rx.search(text)), 0.0)
+        if urgency >= EMERGENCY and _NOT_RED_FLAG.search(text):
+            urgency = 3.0 if _URGENT[1][0].search(text) else 0.0      # a stuffy nose is not an emergency
         return Decision(
             intent=intent,
             intent_probs=probs,

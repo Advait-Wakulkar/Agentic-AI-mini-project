@@ -39,7 +39,8 @@ def verify_token(token: str) -> dict:
     if r.status_code != 200:
         raise HTTPException(401, "Your session has expired. Please sign in again.")
     body = r.json()
-    user = {"id": body["id"], "email": (body.get("email") or "").lower()}
+    user = {"id": body["id"], "email": (body.get("email") or "").lower(),
+            "email_confirmed_at": body.get("email_confirmed_at") or body.get("confirmed_at")}
     _cache[key] = (time.time() + 300, user)
     return user
 
@@ -57,7 +58,8 @@ def current_user(request: Request) -> dict | None:
 def is_staff(user: dict | None) -> bool:
     if not enabled():
         return True  # demo mode: the local user plays both roles
-    return bool(user) and user["email"] in config.STAFF_EMAILS
+    # (review: without email confirmation anyone could sign up with a listed staff address)
+    return bool(user) and user["email"] in config.STAFF_EMAILS and bool(user.get("email_confirmed_at"))
 
 
 def staff_name(user: dict | None) -> str:

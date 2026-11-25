@@ -192,7 +192,15 @@ def run_job(conn, llm, job: dict, now: datetime) -> dict:
 def run_once(conn, llm, now: Optional[datetime] = None) -> dict:
     """Run every due job once. Safe to call repeatedly: nothing is ever sent twice."""
     now = now or clinic_now()
-    jobs = [run_job(conn, llm, job, now) for job in due_jobs(conn, now)]
+    jobs = []
+    for job in due_jobs(conn, now):
+        try:
+            jobs.append(run_job(conn, llm, job, now))
+        except Exception as e:      # (review: one bad job used to abort the whole run, every tick)
+            log.warning("reminder job for appointment %s failed: %s", job["appt"]["id"], str(e)[:200])
+            jobs.append({"appointment_id": job["appt"]["id"], "patient": job["appt"]["patient_alias"], "kind": job["kind"],
+                         "when": _when(job["appt"]), "sent": {}, "fallback": [], "rejected": 0, "error": str(e)[:200],
+                         "steps": []})
     return {"ran_at": datetime.now().isoformat(timespec="seconds"), "clinic_now": now.isoformat(timespec="minutes"),
             "jobs": len(jobs), "fallbacks": sum(1 for j in jobs if j["fallback"]), "results": jobs}
 
